@@ -4,6 +4,7 @@ import torch
 from engine import train_one_epoch
 from dataset import build_dataset, build_sampler
 from model import build_model
+from loss import build_criterion
 import argparse
 
 def parse_args():
@@ -18,22 +19,17 @@ def parse_args():
     return parser.parse_args()
 
 def main(args):
-
-  # Use MNIST dataset for training
   dataset = build_dataset(args)
-
-  # build episode sampler
   episode_sampler = build_sampler(args, dataset)
-
-  # build dataloader
   dataloader = DataLoader(dataset, batch_sampler=episode_sampler)
 
-  # build model from model/__init__.py
   model = build_model(args)
+
+  criterion = build_criterion(args)
 
   optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
-  train_one_epoch(model, dataloader, optimizer, args)
+  train_one_epoch(model, criterion, dataloader, optimizer, args)
 
 
 if __name__ == '__main__':
