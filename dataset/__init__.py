@@ -1,5 +1,5 @@
 from torchvision import datasets, transforms
-from .episode_sampler import EpisodeSampler
+from dataset.episode_sampler import EpisodeSampler
 
 
 def build_dataset(args):

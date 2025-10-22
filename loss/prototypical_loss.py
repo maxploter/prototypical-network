@@ -58,4 +58,8 @@ class PrototypicalLoss(nn.Module):
       # Compute loss as negative log likelihood
       loss = torch.nn.functional.nll_loss(log_p_y, query_labels)
 
-      return loss
+      # Compute accuracy
+      predictions = torch.argmax(-dists, dim=1)
+      accuracy = (predictions == query_labels).float().mean()
+
+      return loss, accuracy

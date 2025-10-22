@@ -1,9 +1,7 @@
 import torch
 from tqdm import tqdm
-from loss.prototype_network_loss import prototypical_loss
 
-
-def train_one_epoch(model, dataloader, optimizer, args):
+def train_one_epoch(model, criterion, dataloader, optimizer, args):
     """
     Train the model for one epoch.
 
@@ -33,10 +31,9 @@ def train_one_epoch(model, dataloader, optimizer, args):
         embeddings = model(images)
 
         # Compute prototypical loss
-        loss, accuracy = prototypical_loss(
+        loss, accuracy = criterion(
             embeddings,
             labels,
-            n_support=args.k_shot
         )
 
         # Backward pass

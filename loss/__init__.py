@@ -1,4 +1,4 @@
-from .prototypical_loss import PrototypicalLoss
+from loss.prototypical_loss import PrototypicalLoss
 
 
 def build_criterion(args):

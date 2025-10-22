@@ -1,4 +1,4 @@
-from .prototype_network import PrototypicalNetwork
+from model.prototypical_network import PrototypicalNetwork
 
 
 def build_model(args):
