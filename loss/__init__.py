@@ -1,8 +1,10 @@
-from .prototype_network_loss import PrototypicalLoss
+from .prototypical_loss import PrototypicalLoss
 
 
 def build_criterion(args):
     """Build prototypical loss criterion"""
-    criterion = PrototypicalLoss()
+    criterion = PrototypicalLoss(
+        k_shot=args.k_shot
+    )
     return criterion
 
