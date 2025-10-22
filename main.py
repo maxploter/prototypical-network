@@ -1,11 +1,12 @@
 from torch.utils.data import DataLoader
 import torch
+import os
+import argparse
 
 from engine import train_one_epoch
 from dataset import build_dataset, build_sampler
 from model import build_model
 from loss import build_criterion
-import argparse
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Training Prototype Network")
@@ -15,10 +16,13 @@ def parse_args():
     parser.add_argument('--num_episodes', type=int, default=100, help='Number of training episodes')
     parser.add_argument('--lr', type=float, default=0.001, help='Learning rate')
     parser.add_argument('--embedding_dim', type=int, default=64, help='Embedding dimension')
+    parser.add_argument('--output_dir', type=str, default='./checkpoints', help='Directory to save model checkpoints')
     parser.add_argument('--device', type=str, default='cuda' if torch.cuda.is_available() else 'cpu', help='Device to use')
     return parser.parse_args()
 
 def main(args):
+  os.makedirs(args.output_dir, exist_ok=True)
+
   dataset = build_dataset(args)
   episode_sampler = build_sampler(args, dataset)
   dataloader = DataLoader(dataset, batch_sampler=episode_sampler)
@@ -30,6 +34,14 @@ def main(args):
   optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
   train_one_epoch(model, criterion, dataloader, optimizer, args)
+
+  # Save final model
+  model_path = os.path.join(args.output_dir, 'prototypical_network_final.pth')
+  torch.save({
+      'model': model.state_dict(),
+      'args': vars(args),
+  }, model_path)
+  print(f'Model saved to {model_path}')
 
 
 if __name__ == '__main__':
