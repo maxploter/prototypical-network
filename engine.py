@@ -1,7 +1,7 @@
 import torch
 from tqdm import tqdm
 
-def train_one_epoch(model, criterion, dataloader, optimizer, args):
+def train_one_epoch(model, criterion, dataloader, optimizer, args, epoch=None):
     """
     Train the model for one epoch.
 
@@ -10,14 +10,15 @@ def train_one_epoch(model, criterion, dataloader, optimizer, args):
         dataloader: DataLoader with episode sampler
         optimizer: Optimizer for training
         args: Training arguments
+        epoch: Current epoch number (optional)
     """
     model.train()
 
     total_loss = 0.0
-    total_accuracy = 0.0
 
     # Progress bar
-    pbar = tqdm(dataloader, desc='Training')
+    desc = f'Training Epoch {epoch}' if epoch is not None else 'Training'
+    pbar = tqdm(dataloader, desc=desc)
 
     for episode_idx, (images, labels) in enumerate(pbar):
         # Move data to device

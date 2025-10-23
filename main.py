@@ -16,6 +16,8 @@ def parse_args():
     parser.add_argument('--k_shot', type=int, default=5, help='Number of support samples per class')
     parser.add_argument('--q_query', type=int, default=15, help='Number of query samples per class')
     parser.add_argument('--num_episodes', type=int, default=100, help='Number of training episodes')
+    parser.add_argument('--epochs', type=int, default=10, help='Number of training epochs')
+    parser.add_argument('--batch_size', type=int, default=128, help='Batch size for autoencoder training')
     parser.add_argument('--lr', type=float, default=0.001, help='Learning rate')
     parser.add_argument('--embedding_dim', type=int, default=64, help='Embedding dimension')
     parser.add_argument('--autoencoder_path', type=str, default=None, help='Path to pretrained autoencoder weights')
@@ -27,8 +29,8 @@ def main(args):
   os.makedirs(args.output_dir, exist_ok=True)
 
   dataset = build_dataset(args)
-  episode_sampler = build_sampler(args, dataset)
-  dataloader = DataLoader(dataset, batch_sampler=episode_sampler)
+  sampler = build_sampler(args, dataset)
+  dataloader = DataLoader(dataset, batch_sampler=sampler)
 
   model = build_model(args)
 
@@ -36,7 +38,9 @@ def main(args):
 
   optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
-  train_one_epoch(model, criterion, dataloader, optimizer, args)
+  # Training loop for multiple epochs
+  for epoch in range(args.epochs):
+    train_one_epoch(model, criterion, dataloader, optimizer, args, epoch=epoch + 1)
 
   # Save final model
   model_path = os.path.join(args.output_dir, args.model + '.pth')

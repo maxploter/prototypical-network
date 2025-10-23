@@ -1,6 +1,6 @@
 from torchvision import datasets, transforms
 from dataset.episode_sampler import EpisodeSampler
-
+from torch.utils.data import RandomSampler, BatchSampler
 
 def build_dataset(args):
     """Build MNIST dataset for training"""
@@ -20,14 +20,20 @@ def build_dataset(args):
 
 
 def build_sampler(args, dataset):
-    """Build episode sampler for few-shot learning"""
-    samples_per_class = args.k_shot + args.q_query
+    if args.model == 'autoencoder':
+        sampler = RandomSampler(dataset)
+        sampler = BatchSampler(
+            sampler,
+            batch_size=args.batch_size,
+        )
+    else:
+      samples_per_class = args.k_shot + args.q_query
 
-    sampler = EpisodeSampler(
-        labels=dataset.targets,
-        classes_per_iteration=args.n_way,
-        samples_per_class=samples_per_class,
-        number_of_iterations=args.num_episodes
-    )
+      sampler = EpisodeSampler(
+          labels=dataset.targets,
+          classes_per_iteration=args.n_way,
+          samples_per_class=samples_per_class,
+          number_of_iterations=args.num_episodes
+      )
 
     return sampler
