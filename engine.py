@@ -6,8 +6,9 @@ def train_one_epoch(model, criterion, dataloader, optimizer, args, epoch=None):
     Train the model for one epoch.
 
     Args:
-        model: The prototypical network model
-        dataloader: DataLoader with episode sampler
+        model: The model to train
+        criterion: Loss function
+        dataloader: DataLoader with training data
         optimizer: Optimizer for training
         args: Training arguments
         epoch: Current epoch number (optional)
@@ -20,22 +21,19 @@ def train_one_epoch(model, criterion, dataloader, optimizer, args, epoch=None):
     desc = f'Training Epoch {epoch}' if epoch is not None else 'Training'
     pbar = tqdm(dataloader, desc=desc)
 
-    for episode_idx, (images, labels) in enumerate(pbar):
+    for episode_idx, (inputs, targets) in enumerate(pbar):
         # Move data to device
-        images = images.to(args.device)
-        labels = labels.to(args.device)
+        inputs = inputs.to(args.device)
+        targets = targets.to(args.device)
 
         # Zero gradients
         optimizer.zero_grad()
 
-        # Forward pass: get embeddings
-        embeddings = model(images)
+        # Forward pass
+        outputs = model(inputs)
 
-        # Compute prototypical loss
-        loss = criterion(
-            embeddings,
-            labels,
-        )
+        # Compute loss
+        loss = criterion(outputs, targets)
 
         # Backward pass
         loss.backward()

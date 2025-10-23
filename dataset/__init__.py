@@ -1,5 +1,6 @@
 from torchvision import datasets, transforms
 from dataset.episode_sampler import EpisodeSampler
+from dataset.autoencoder_dataset import AutoencoderDataset
 from torch.utils.data import RandomSampler, BatchSampler
 
 
@@ -17,12 +18,18 @@ def build_dataset(args):
     transform=transform
   )
 
+  # Wrap with autoencoder dataset if using autoencoder model
+  if args.model == 'autoencoder':
+    dataset = AutoencoderDataset(dataset)
+
   return dataset
 
 
 def build_sampler(args, dataset):
   if args.model == 'autoencoder':
-    sampler = RandomSampler(dataset)
+    # For autoencoder, use the base dataset for sampler
+    base_dataset = dataset.base_dataset if isinstance(dataset, AutoencoderDataset) else dataset
+    sampler = RandomSampler(base_dataset)
     sampler = BatchSampler(
       sampler,
       batch_size=args.batch_size,

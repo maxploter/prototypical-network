@@ -25,7 +25,6 @@ class Autoencoder(nn.Module):
     )
 
   def forward(self, x):
-    x = x.view(x.size(0), -1)
     encoded = self.encoder(x)
     decoded = self.decoder(encoded)
     return decoded
