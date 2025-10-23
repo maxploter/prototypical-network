@@ -78,6 +78,10 @@ class PrototypicalAutoencoder(nn.Module):
     )
 
   def forward(self, x):
+    # Flatten the input: [batch_size, 1, 28, 28] -> [batch_size, 784]
+    batch_size = x.size(0)
+    x = x.view(batch_size, -1)
+
     x = self.encoder(x)
     embeddings = self.prototypical_network(x)
     return embeddings
