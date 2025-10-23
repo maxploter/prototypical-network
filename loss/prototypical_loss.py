@@ -11,16 +11,7 @@ class PrototypicalLoss(nn.Module):
       self.k_shot = k_shot
 
     def forward(self, embeddings, targets):
-      """
-      Compute prototypical loss using Euclidean distance
 
-      Args:
-        embeddings: tensor of shape (n_samples, embedding_dim)
-        targets: tensor of shape (n_samples,) with class labels
-
-      Returns:
-        loss: scalar tensor
-      """
       targets = targets.to('cpu')
       embeddings = embeddings.to('cpu')
 
@@ -28,14 +19,11 @@ class PrototypicalLoss(nn.Module):
       n_way = len(classes)
       n_query = torch.sum(targets == classes[0]).item() - self.k_shot
 
-      # Split embeddings by class and compute prototypes
-      # Assumes data is ordered: first k_shot samples are support, rest are query
       prototypes = torch.stack([
           chunk[:self.k_shot].mean(0)
           for chunk in torch.split(embeddings, embeddings.size(0) // n_way)
       ])
 
-      # Get query samples (skip first k_shot samples of each class)
       query_samples = torch.cat([
           chunk[self.k_shot:]
           for chunk in torch.split(embeddings, embeddings.size(0) // n_way)
@@ -58,8 +46,4 @@ class PrototypicalLoss(nn.Module):
       # Compute loss as negative log likelihood
       loss = torch.nn.functional.nll_loss(log_p_y, query_labels)
 
-      # Compute accuracy
-      predictions = torch.argmax(-dists, dim=1)
-      accuracy = (predictions == query_labels).float().mean()
-
-      return loss, accuracy
+      return loss

@@ -31,7 +31,7 @@ def train_one_epoch(model, criterion, dataloader, optimizer, args):
         embeddings = model(images)
 
         # Compute prototypical loss
-        loss, accuracy = criterion(
+        loss = criterion(
             embeddings,
             labels,
         )
@@ -42,19 +42,15 @@ def train_one_epoch(model, criterion, dataloader, optimizer, args):
 
         # Update metrics
         total_loss += loss.item()
-        total_accuracy += accuracy.item()
 
         # Update progress bar
         avg_loss = total_loss / (episode_idx + 1)
-        avg_acc = total_accuracy / (episode_idx + 1)
         pbar.set_postfix({
             'loss': f'{avg_loss:.4f}',
-            'acc': f'{avg_acc:.4f}'
         })
 
     # Print final statistics
     print(f'\nTraining complete:')
     print(f'Average Loss: {avg_loss:.4f}')
-    print(f'Average Accuracy: {avg_acc:.4f}')
 
-    return avg_loss, avg_acc
+    return avg_loss

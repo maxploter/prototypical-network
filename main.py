@@ -10,12 +10,15 @@ from loss import build_criterion
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Training Prototype Network")
+    parser.add_argument('--model', type=str, default='prototypical', choices=['prototypical_cnn', 'autoencoder', 'prototypical_autoencoder'],
+                        help='Type of model to use: prototypical or autoencoder')
     parser.add_argument('--n_way', type=int, default=5, help='Number of classes per episode')
     parser.add_argument('--k_shot', type=int, default=5, help='Number of support samples per class')
     parser.add_argument('--q_query', type=int, default=15, help='Number of query samples per class')
     parser.add_argument('--num_episodes', type=int, default=100, help='Number of training episodes')
     parser.add_argument('--lr', type=float, default=0.001, help='Learning rate')
     parser.add_argument('--embedding_dim', type=int, default=64, help='Embedding dimension')
+    parser.add_argument('--autoencoder_path', type=str, default=None, help='Path to pretrained autoencoder weights')
     parser.add_argument('--output_dir', type=str, default='./checkpoints', help='Directory to save model checkpoints')
     parser.add_argument('--device', type=str, default='cuda' if torch.cuda.is_available() else 'cpu', help='Device to use')
     return parser.parse_args()
@@ -36,7 +39,7 @@ def main(args):
   train_one_epoch(model, criterion, dataloader, optimizer, args)
 
   # Save final model
-  model_path = os.path.join(args.output_dir, 'prototypical_network_final.pth')
+  model_path = os.path.join(args.output_dir, args.model + '.pth')
   torch.save({
       'model': model.state_dict(),
       'args': vars(args),

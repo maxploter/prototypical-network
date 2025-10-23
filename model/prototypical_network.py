@@ -3,14 +3,14 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 
-class PrototypicalNetwork(nn.Module):
+class PrototypicalCnnNetwork(nn.Module):
     """
     Prototypical Network for few-shot learning.
     Uses a CNN encoder to embed images into a learned metric space.
     """
 
     def __init__(self, embedding_dim=64):
-        super(PrototypicalNetwork, self).__init__()
+        super(PrototypicalCnnNetwork, self).__init__()
 
         # CNN encoder for MNIST (28x28 grayscale images)
         self.encoder = nn.Sequential(
@@ -63,3 +63,21 @@ class PrototypicalNetwork(nn.Module):
 
         return embeddings
 
+class PrototypicalAutoencoder(nn.Module):
+
+  def __init__(self, encoder, encoder_dim=64):
+    super(PrototypicalAutoencoder, self).__init__()
+    self.encoder = encoder
+
+    self.prototypical_network = nn.Sequential(
+      nn.Linear(encoder_dim, 32),
+      nn.ReLU(),
+      nn.Linear(32, 16),
+      nn.ReLU(),
+      nn.Linear(16, 2),
+    )
+
+  def forward(self, x):
+    x = self.encoder(x)
+    embeddings = self.prototypical_network(x)
+    return embeddings
