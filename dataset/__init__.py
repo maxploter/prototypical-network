@@ -13,7 +13,7 @@ def build_dataset(args):
 
   dataset = datasets.MNIST(
     root='./',
-    train=True,
+    train=(args.dataset_split == 'train'),
     download=True,
     transform=transform
   )
