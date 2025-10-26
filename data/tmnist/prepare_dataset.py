@@ -2,28 +2,48 @@ import argparse
 import pandas as pd
 import numpy as np
 from pathlib import Path
+import os
 
 
 def download_kaggle_dataset(output_dir, dataset_name):
-  output_dir = Path(output_dir)
-  output_dir.mkdir(parents=True, exist_ok=True)
-
-  # Extract the actual dataset filename from dataset_name (e.g., "user/dataset" -> "dataset")
+  # Create a subdirectory for this specific dataset
   dataset_filename = dataset_name.split('/')[-1]
-  csv_file = output_dir / f"{dataset_filename}.csv"
+  dataset_dir = Path(output_dir) / dataset_filename
+  dataset_dir.mkdir(parents=True, exist_ok=True)
 
-  # Check if dataset already exists
-  if csv_file.exists():
-    return output_dir
+  # Check if dataset already exists by looking for any CSV file
+  csv_files = list(dataset_dir.glob("*.csv"))
+  if csv_files:
+    print(f"Dataset already exists at {dataset_dir}")
+    return dataset_dir
 
   try:
+    # Check for environment variables before importing kaggle
+    kaggle_username = os.environ.get('KAGGLE_USERNAME')
+    kaggle_key = os.environ.get('KAGGLE_KEY')
+
+    if not kaggle_username or not kaggle_key:
+      raise RuntimeError(
+        "Kaggle credentials not found. Please set environment variables:\n"
+        "  KAGGLE_USERNAME: your Kaggle username\n"
+        "  KAGGLE_KEY: your Kaggle API key\n\n"
+        "In Google Colab, use:\n"
+        "  from google.colab import userdata\n"
+        "  os.environ['KAGGLE_USERNAME'] = userdata.get('KAGGLE_USERNAME')\n"
+        "  os.environ['KAGGLE_KEY'] = userdata.get('KAGGLE_KEY')\n\n"
+        "Or alternatively, create kaggle.json in ~/.kaggle/\n"
+        "See: https://github.com/Kaggle/kaggle-api#api-credentials"
+      )
+
     import kaggle
+    print(f"Downloading dataset {dataset_name}...")
     kaggle.api.dataset_download_files(
       dataset_name,
-      path=str(output_dir),
+      path=str(dataset_dir),
       unzip=True
     )
-    return output_dir
+    print(f"Dataset downloaded to {dataset_dir}")
+    return dataset_dir
   except ImportError:
     raise ImportError("Kaggle API not installed. Install with: pip install kaggle")
   except Exception as e:
@@ -82,8 +102,13 @@ def process(dataset_dir, dataset_name, train_ratio=0.64, val_ratio=0.16, test_ra
   dataset_filename = dataset_name.split('/')[-1]
   csv_file = dataset_dir / f"{dataset_filename}.csv"
 
-  if not csv_file.exists():
-    raise FileNotFoundError(f"CSV file not found: {csv_file}")
+  # Find any CSV file in the dataset directory
+  csv_files = list(dataset_dir.glob("*.csv"))
+  if not csv_files:
+    raise FileNotFoundError(f"No CSV file found in dataset directory: {dataset_dir}")
+
+  # Use the first found CSV file
+  csv_file = csv_files[0]
 
   unique_labels = get_unique_labels(csv_file)
 
