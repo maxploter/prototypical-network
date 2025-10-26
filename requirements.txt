@@ -3,3 +3,4 @@ torchvision
 tqdm
 jupytext
 numpy<2
+pandas

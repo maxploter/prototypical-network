@@ -1,3 +1,11 @@
+## Dataset Preparation
+
+### TMNIST
+
+```shell
+python data/tmnist/prepare_dataset.py --dataset_name nimishmagre/tmnist-glyphs-1812-characters --output_dir ./data/tmnist --seed 42
+```
+
 ## Train
 
 ### Train Autoencoder
