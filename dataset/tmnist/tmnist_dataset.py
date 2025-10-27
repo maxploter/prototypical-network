@@ -27,19 +27,23 @@ class TMNISTDataset(Dataset):
     # Load the full dataset
     df_full = pd.read_csv(self.dataset_path)
 
-    # Find the 'labels' column and keep only columns from that point onwards
-    if 'labels' not in df_full.columns:
-      raise ValueError(f"'labels' column not found in dataset. Available columns: {df_full.columns.tolist()}")
+    # Detect the label column name (either 'labels' or 'label')
+    if 'labels' in df_full.columns:
+      self.label_col = 'labels'
+    elif 'label' in df_full.columns:
+      self.label_col = 'label'
+    else:
+      raise ValueError(f"Neither 'labels' nor 'label' column found in dataset. Available columns: {df_full.columns.tolist()}")
 
-    labels_idx = df_full.columns.get_loc('labels')
-    # Keep only columns from 'labels' onwards
+    labels_idx = df_full.columns.get_loc(self.label_col)
+    # Keep only columns from label column onwards
     self.df = df_full.iloc[:, labels_idx:]
 
     # Load the labels for this split
     split_labels = self._load_split_labels()
 
     # Filter the dataset to only include samples from allowed labels
-    self.df = self.df[self.df['labels'].isin(split_labels)]
+    self.df = self.df[self.df[self.label_col].isin(split_labels)]
     self.df = self.df.reset_index(drop=True)
 
     # Create label mapping (original label -> class index)
@@ -48,7 +52,7 @@ class TMNISTDataset(Dataset):
 
     # Create targets field (list of class indices for all samples)
     # This matches the MNIST dataset interface
-    self.targets = [self.label_to_idx[label] for label in self.df['labels']]
+    self.targets = [self.label_to_idx[label] for label in self.df[self.label_col]]
 
     print(f"Loaded {split} split: {len(self.df)} samples from {len(split_labels)} classes")
 
@@ -82,11 +86,11 @@ class TMNISTDataset(Dataset):
     row = self.df.iloc[idx]
 
     # Extract label
-    original_label = row['labels']
+    original_label = row[self.label_col]
     class_idx = self.label_to_idx[original_label]
 
     # Extract image data (all columns after 'labels' are pixel data)
-    pixel_columns = [col for col in self.df.columns if col != 'labels']
+    pixel_columns = [col for col in self.df.columns if col != self.label_col]
     image_data = row[pixel_columns].values.astype(np.uint8)
 
     # Extract image data (all columns after label column are pixel data)
@@ -107,11 +111,11 @@ class TMNISTDataset(Dataset):
 
   def get_labels(self):
     """Return all class indices in the dataset."""
-    return [self.label_to_idx[label] for label in self.df['labels']]
+    return [self.label_to_idx[label] for label in self.df[self.label_col]]
 
   def get_original_labels(self):
     """Return all original labels in the dataset."""
-    return self.df['labels'].tolist()
+    return self.df[self.label_col].tolist()
 
   def num_classes(self):
     """Return the number of classes in this split."""
