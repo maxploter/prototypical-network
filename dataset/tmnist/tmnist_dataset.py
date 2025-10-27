@@ -89,7 +89,7 @@ class TMNISTDataset(Dataset):
     pixel_columns = [col for col in self.df.columns if col != 'labels']
     image_data = row[pixel_columns].values.astype(np.uint8)
 
-    # Reshape to image dimensions (assuming square image)
+    # Extract image data (all columns after label column are pixel data)
     img_size = int(np.sqrt(len(image_data)))
     image = image_data.reshape(img_size, img_size)
 
