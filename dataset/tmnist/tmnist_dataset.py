@@ -42,14 +42,18 @@ class TMNISTDataset(Dataset):
     # Load the labels for this split
     split_labels = self._load_split_labels()
     print(f"Loaded {len(split_labels)} labels")
+    print(f"Filtering dataset (this may take a moment for large datasets)...")
     # Filter the dataset to only include samples from allowed labels
     self.df = self.df[self.df[self.label_col].isin(split_labels)]
+    print(f"Filtering complete. Resetting index...")
     self.df = self.df.reset_index(drop=True)
+    print(f"Index reset complete.")
 
     # Create label mapping (original label -> class index)
     self.label_to_idx = {label: idx for idx, label in enumerate(split_labels)}
     self.idx_to_label = {idx: label for label, idx in self.label_to_idx.items()}
 
+    print(f"Creating targets tensor...")
     # Create targets field (list of class indices for all samples)
     # This matches the MNIST dataset interface
     self.targets = torch.tensor([self.label_to_idx[label] for label in self.df[self.label_col]], dtype=torch.long)
