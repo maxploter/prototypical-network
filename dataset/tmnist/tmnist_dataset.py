@@ -36,12 +36,12 @@ class TMNISTDataset(Dataset):
       raise ValueError(f"Neither 'labels' nor 'label' column found in dataset. Available columns: {df_full.columns.tolist()}")
 
     labels_idx = df_full.columns.get_loc(self.label_col)
+    print(f"Using label column: '{self.label_col}' at index {labels_idx}")
     # Keep only columns from label column onwards
     self.df = df_full.iloc[:, labels_idx:]
-
     # Load the labels for this split
     split_labels = self._load_split_labels()
-
+    print(f"Loaded {len(split_labels)} labels")
     # Filter the dataset to only include samples from allowed labels
     self.df = self.df[self.df[self.label_col].isin(split_labels)]
     self.df = self.df.reset_index(drop=True)
