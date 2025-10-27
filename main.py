@@ -12,8 +12,12 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Training Prototype Network")
     parser.add_argument('--model', type=str, default='prototypical', choices=['prototypical_cnn', 'autoencoder', 'prototypical_autoencoder'],
                         help='Type of model to use: prototypical or autoencoder')
-    parser.add_argument('--dataset_split', type=str, default='train', choices=['train', 'test'],
-                        help='Dataset split to use: train or test')
+    parser.add_argument('--dataset_name', type=str, default='mnist', choices=['mnist', 'tmnist'],
+                        help='Dataset to use: mnist or tmnist')
+    parser.add_argument('--dataset_path', type=str, default=None,
+                        help='Path to dataset CSV file (required for tmnist). Default: ./data/tmnist/tmnist-glyphs-1812-characters/tmnist-glyphs-1812-characters.csv')
+    parser.add_argument('--dataset_split', type=str, default='train', choices=['train', 'val', 'test'],
+                        help='Dataset split to use: train, val, or test')
     parser.add_argument('--n_way', type=int, default=5, help='Number of classes per episode')
     parser.add_argument('--k_shot', type=int, default=5, help='Number of support samples per class')
     parser.add_argument('--q_query', type=int, default=15, help='Number of query samples per class')
@@ -28,6 +32,15 @@ def parse_args():
     return parser.parse_args()
 
 def main(args):
+  # Set default dataset_path for tmnist if not provided
+  if args.dataset_name == 'tmnist' and args.dataset_path is None:
+    args.dataset_path = './data/tmnist/tmnist-glyphs-1812-characters/tmnist-glyphs-1812-characters.csv'
+    print(f"Using default TMNIST dataset path: {args.dataset_path}")
+
+  # Validate tmnist requires dataset_path
+  if args.dataset_name == 'tmnist' and args.dataset_path is None:
+    raise ValueError("--dataset_path is required when using tmnist dataset")
+
   os.makedirs(args.output_dir, exist_ok=True)
 
   dataset = build_dataset(args)
