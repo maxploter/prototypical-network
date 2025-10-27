@@ -24,7 +24,7 @@ This will:
 python main.py \
   --model autoencoder \
   --dataset_name tmnist \
-  --dataset_path ./data/tmnist/tmnist-glyphs-1812-characters/tmnist-glyphs-1812-characters.csv \
+  --dataset_path ./data/tmnist/tmnist-glyphs-1812-characters/Glyphs_TMNIST_updated.csv \
   --dataset_split train \
   --epochs 2 \
   --batch_size 64 \
@@ -39,7 +39,7 @@ python main.py \
 python main.py \
   --model prototypical_autoencoder \
   --dataset_name tmnist \
-  --dataset_path ./data/tmnist/tmnist-glyphs-1812-characters/tmnist-glyphs-1812-characters.csv \
+  --dataset_path ./data/tmnist/tmnist-glyphs-1812-characters/Glyphs_TMNIST_updated.csv \
   --dataset_split train \
   --autoencoder_path ./checkpoints/autoencoder.pth \
   --epochs 2 \
