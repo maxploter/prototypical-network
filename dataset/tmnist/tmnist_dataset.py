@@ -43,8 +43,9 @@ class TMNISTDataset(Dataset):
     split_labels = self._load_split_labels()
     print(f"Loaded {len(split_labels)} labels")
     print(f"Filtering dataset (this may take a moment for large datasets)...")
-    # Filter the dataset to only include samples from allowed labels
-    self.df = self.df[self.df[self.label_col].isin(split_labels)]
+    # Use numpy's isin which is much faster than pandas isin() for large datasets
+    mask = np.isin(self.df[self.label_col].values, list(split_labels))
+    self.df = self.df[mask]
     print(f"Filtering complete. Resetting index...")
     self.df = self.df.reset_index(drop=True)
     print(f"Index reset complete.")
