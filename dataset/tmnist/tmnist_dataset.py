@@ -52,7 +52,7 @@ class TMNISTDataset(Dataset):
 
     # Create targets field (list of class indices for all samples)
     # This matches the MNIST dataset interface
-    self.targets = [self.label_to_idx[label] for label in self.df[self.label_col]]
+    self.targets = torch.tensor([self.label_to_idx[label] for label in self.df[self.label_col]], dtype=torch.long)
 
     print(f"Loaded {split} split: {len(self.df)} samples from {len(split_labels)} classes")
 
