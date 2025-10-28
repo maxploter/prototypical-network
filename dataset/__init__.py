@@ -1,22 +1,32 @@
 from torchvision import datasets, transforms
 from dataset.episode_sampler import EpisodeSampler
 from dataset.autoencoder_dataset import AutoencoderDataset
+from dataset.tmnist import TMNISTDataset
 from torch.utils.data import RandomSampler, BatchSampler
 
 
 def build_dataset(args):
-  """Build MNIST dataset for training"""
+  """Build dataset for training"""
   transform = transforms.Compose([
     transforms.ToTensor(),
     transforms.Normalize((0.1307,), (0.3081,))
   ])
 
-  dataset = datasets.MNIST(
-    root='./',
-    train=(args.dataset_split == 'train'),
-    download=True,
-    transform=transform
-  )
+  if args.dataset_name == 'mnist':
+    dataset = datasets.MNIST(
+      root='./',
+      train=(args.dataset_split == 'train'),
+      download=True,
+      transform=transform
+    )
+  elif args.dataset_name == 'tmnist':
+    dataset = TMNISTDataset(
+      dataset_path=args.dataset_path,
+      split=args.dataset_split,
+      transform=transform
+    )
+  else:
+    raise ValueError(f"Unknown dataset: {args.dataset_name}. Supported: 'mnist', 'tmnist'")
 
   # Wrap with autoencoder dataset if using autoencoder model
   if args.model == 'autoencoder':
