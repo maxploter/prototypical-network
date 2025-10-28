@@ -24,21 +24,24 @@ class TMNISTDataset(Dataset):
     self.split = split
     self.transform = transform
 
-    # Load the full dataset
-    df_full = pd.read_csv(self.dataset_path)
+    # First, load just the header to detect the label column
+    df_header = pd.read_csv(self.dataset_path, nrows=0)
 
     # Detect the label column name (either 'labels' or 'label')
-    if 'labels' in df_full.columns:
+    if 'labels' in df_header.columns:
       self.label_col = 'labels'
-    elif 'label' in df_full.columns:
+    elif 'label' in df_header.columns:
       self.label_col = 'label'
     else:
-      raise ValueError(f"Neither 'labels' nor 'label' column found in dataset. Available columns: {df_full.columns.tolist()}")
+      raise ValueError(f"Neither 'labels' nor 'label' column found in dataset. Available columns: {df_header.columns.tolist()}")
 
-    labels_idx = df_full.columns.get_loc(self.label_col)
+    labels_idx = df_header.columns.get_loc(self.label_col)
     print(f"Using label column: '{self.label_col}' at index {labels_idx}")
-    # Keep only columns from label column onwards
-    self.df = df_full.iloc[:, labels_idx:]
+
+    # Load only the label column first to do filtering
+    print(f"Loading dataset for filtering...")
+    df_labels = pd.read_csv(self.dataset_path, usecols=[self.label_col])
+
     # Load the labels for this split
     split_labels = self._load_split_labels()
     print(f"Loaded {len(split_labels)} labels")
@@ -48,15 +51,20 @@ class TMNISTDataset(Dataset):
     self.label_to_idx = {label: idx for idx, label in enumerate(split_labels)}
     self.idx_to_label = {idx: label for label, idx in self.label_to_idx.items()}
 
-    print(f"Filtering dataset (this may take a moment for large datasets)...")
-    # Convert split_labels to a set for faster lookup
+    # Filter to get row indices
+    print(f"Filtering dataset...")
     split_labels_set = set(split_labels)
+    mask = df_labels[self.label_col].isin(split_labels_set)
+    matching_indices = mask[mask].index.tolist()
+    print(f"Found {len(matching_indices)} matching rows")
 
-    # Use isin() with a set - pandas optimizes this
-    self.df = self.df[self.df[self.label_col].isin(split_labels_set)]
-    print(f"Filtering complete. Found {len(self.df)} samples. Resetting index...")
+    # Now load only the matching rows
+    print(f"Loading matching rows...")
+    df_full = pd.read_csv(self.dataset_path, skiprows=lambda x: x != 0 and x-1 not in matching_indices)
+
+    # Keep only columns from label column onwards
+    self.df = df_full.iloc[:, labels_idx:]
     self.df = self.df.reset_index(drop=True)
-    print(f"Index reset complete.")
 
     print(f"Creating targets tensor...")
     # Create targets field (list of class indices for all samples)
