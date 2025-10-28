@@ -49,11 +49,12 @@ class TMNISTDataset(Dataset):
     self.idx_to_label = {idx: label for label, idx in self.label_to_idx.items()}
 
     print(f"Filtering dataset (this may take a moment for large datasets)...")
-    # Use dictionary lookup for O(1) per-element check instead of O(N)
-    # This changes complexity from O(M*N) to O(M)
-    mask = self.df[self.label_col].map(lambda x: x in self.label_to_idx).values
-    self.df = self.df[mask]
-    print(f"Filtering complete. Resetting index...")
+    # Convert split_labels to a set for faster lookup
+    split_labels_set = set(split_labels)
+
+    # Use isin() with a set - pandas optimizes this
+    self.df = self.df[self.df[self.label_col].isin(split_labels_set)]
+    print(f"Filtering complete. Found {len(self.df)} samples. Resetting index...")
     self.df = self.df.reset_index(drop=True)
     print(f"Index reset complete.")
 
