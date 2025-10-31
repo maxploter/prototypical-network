@@ -55,8 +55,13 @@ class TMNISTDataset(Dataset):
     print(f"Filtering dataset...")
     split_labels_set = set(split_labels)
     mask = df_labels[self.label_col].isin(split_labels_set)
-    matching_indices = mask[mask].index.tolist()
+    matching_indices = set(mask.index[mask].tolist())
     print(f"Found {len(matching_indices)} matching rows")
+
+    # Create targets directly from filtered labels
+    print(f"Creating targets tensor...")
+    filtered_labels = df_labels[mask][self.label_col]
+    self.targets = torch.tensor([self.label_to_idx[label] for label in filtered_labels], dtype=torch.long)
 
     # Now load only the matching rows
     print(f"Loading matching rows...")
@@ -65,11 +70,6 @@ class TMNISTDataset(Dataset):
     # Keep only columns from label column onwards
     self.df = df_full.iloc[:, labels_idx:]
     self.df = self.df.reset_index(drop=True)
-
-    print(f"Creating targets tensor...")
-    # Create targets field (list of class indices for all samples)
-    # This matches the MNIST dataset interface
-    self.targets = torch.tensor([self.label_to_idx[label] for label in self.df[self.label_col]], dtype=torch.long)
 
     print(f"Loaded {split} split: {len(self.df)} samples from {len(split_labels)} classes")
 
