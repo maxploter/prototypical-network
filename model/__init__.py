@@ -27,7 +27,7 @@ def build_model(args):
                 param.requires_grad = False
             print("Autoencoder frozen (parameters set to requires_grad=False)")
 
-        model = PrototypicalAutoencoder(encoder=autoencoder.encoder)
+        model = PrototypicalAutoencoder(encoder=autoencoder.encoder, encoder_dim=args.embedding_dim)
     elif args.model == 'autoencoder':
         model = Autoencoder(encoding_dim=args.embedding_dim)
     else:
