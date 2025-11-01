@@ -3,7 +3,7 @@ import torch
 import os
 import argparse
 
-from engine import train_one_epoch
+from engine import train_one_epoch, evaluate
 from dataset import build_dataset, build_sampler
 from model import build_model
 from loss import build_criterion
@@ -16,8 +16,6 @@ def parse_args():
                         help='Dataset to use: mnist or tmnist')
     parser.add_argument('--dataset_path', type=str, default=None,
                         help='Path to dataset CSV file (required for tmnist). Default: ./data/tmnist/tmnist-glyphs-1812-characters/Glyphs_TMNIST_updated.csv')
-    parser.add_argument('--dataset_split', type=str, default='train', choices=['train', 'val', 'test'],
-                        help='Dataset split to use: train, val, or test')
     parser.add_argument('--n_way', type=int, default=5, help='Number of classes per episode')
     parser.add_argument('--k_shot', type=int, default=5, help='Number of support samples per class')
     parser.add_argument('--q_query', type=int, default=15, help='Number of query samples per class')
@@ -34,9 +32,15 @@ def parse_args():
 def main(args):
   os.makedirs(args.output_dir, exist_ok=True)
 
-  dataset = build_dataset(args)
-  sampler = build_sampler(args, dataset)
-  dataloader = DataLoader(dataset, batch_sampler=sampler)
+  # Build train dataset and dataloader
+  train_dataset = build_dataset(args, split='train')
+  train_sampler = build_sampler(args, train_dataset)
+  train_dataloader = DataLoader(train_dataset, batch_sampler=train_sampler)
+
+  # Build validation dataset and dataloader
+  val_dataset = build_dataset(args, split='val')
+  val_sampler = build_sampler(args, val_dataset)
+  val_dataloader = DataLoader(val_dataset, batch_sampler=val_sampler)
 
   model = build_model(args)
 
@@ -45,8 +49,27 @@ def main(args):
   optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
   # Training loop for multiple epochs
+  best_val_loss = float('inf')
   for epoch in range(args.epochs):
-    train_one_epoch(model, criterion, dataloader, optimizer, args, epoch=epoch + 1)
+    # Train
+    train_loss = train_one_epoch(model, criterion, train_dataloader, optimizer, args, epoch=epoch + 1)
+
+    # Evaluate
+    val_loss, val_accuracy = evaluate(model, criterion, val_dataloader, args, epoch=epoch + 1)
+
+    # Save best model
+    if val_loss < best_val_loss:
+      best_val_loss = val_loss
+      best_model_path = os.path.join(args.output_dir, args.model + '_best.pth')
+      torch.save({
+          'epoch': epoch + 1,
+          'model': model.state_dict(),
+          'optimizer': optimizer.state_dict(),
+          'val_loss': val_loss,
+          'val_accuracy': val_accuracy,
+          'args': vars(args),
+      }, best_model_path)
+      print(f'Best model saved to {best_model_path} (val_loss: {val_loss:.4f})')
 
   # Save final model
   model_path = os.path.join(args.output_dir, args.model + '.pth')
