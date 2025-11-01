@@ -31,6 +31,14 @@ def parse_args():
                         help='Number of epochs with no improvement after which training will be stopped. Default: None (no early stopping)')
     parser.add_argument('--early_stopping_min_delta', type=float, default=0.0,
                         help='Minimum change in validation loss to qualify as an improvement. Default: 0.0')
+    parser.add_argument('--lr_scheduler', type=str, default='step', choices=['step', 'cosine', 'plateau', 'none'],
+                        help='Learning rate scheduler type: step, cosine, plateau, or none')
+    parser.add_argument('--lr_drop', type=int, default=5,
+                        help='Number of epochs after which learning rate drops (for step scheduler)')
+    parser.add_argument('--lr_gamma', type=float, default=0.1,
+                        help='Factor by which the learning rate is reduced (for step and plateau schedulers)')
+    parser.add_argument('--lr_min', type=float, default=1e-6,
+                        help='Minimum learning rate (for cosine scheduler)')
     return parser.parse_args()
 
 def main(args):
@@ -52,6 +60,20 @@ def main(args):
 
   optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
+  # Create learning rate scheduler
+  lr_scheduler = None
+  if args.lr_scheduler == 'step':
+    lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=args.lr_drop, gamma=args.lr_gamma)
+    print(f'Using StepLR scheduler: lr will drop by factor of {args.lr_gamma} every {args.lr_drop} epochs')
+  elif args.lr_scheduler == 'cosine':
+    lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs, eta_min=args.lr_min)
+    print(f'Using CosineAnnealingLR scheduler: lr will decay to {args.lr_min}')
+  elif args.lr_scheduler == 'plateau':
+    lr_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=args.lr_gamma, patience=2, verbose=True)
+    print(f'Using ReduceLROnPlateau scheduler: lr will drop by factor of {args.lr_gamma} when validation loss plateaus')
+  else:
+    print('No learning rate scheduler used')
+
   # Training loop for multiple epochs
   best_val_loss = float('inf')
   patience_counter = 0
@@ -62,6 +84,17 @@ def main(args):
 
     # Evaluate
     val_loss, val_accuracy = evaluate(model, criterion, val_dataloader, args, epoch=epoch + 1)
+
+    # Update learning rate scheduler
+    if lr_scheduler is not None:
+      if args.lr_scheduler == 'plateau':
+        lr_scheduler.step(val_loss)
+      else:
+        lr_scheduler.step()
+
+      # Log current learning rate
+      current_lr = optimizer.param_groups[0]['lr']
+      print(f'Current learning rate: {current_lr:.6f}')
 
     # Check if validation loss improved
     improvement = best_val_loss - val_loss
