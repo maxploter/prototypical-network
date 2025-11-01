@@ -9,6 +9,8 @@ class PrototypicalLoss(nn.Module):
     def __init__(self, k_shot):
       super(PrototypicalLoss, self).__init__()
       self.k_shot = k_shot
+      # Define which losses are used for backprop
+      self.weight_dict = {'loss_proto': 1.0}
 
     def forward(self, embeddings, targets):
 
@@ -46,4 +48,75 @@ class PrototypicalLoss(nn.Module):
       # Compute loss as negative log likelihood
       loss = torch.nn.functional.nll_loss(log_p_y, query_labels)
 
-      return loss
+      # Compute accuracy (for logging, not backprop)
+      predictions = torch.argmin(dists, dim=1)
+      accuracy = (predictions == query_labels).float().mean()
+
+      # Return dict of losses
+      return {
+          'loss_proto': loss,      # Used for backprop (in weight_dict)
+          'accuracy': accuracy      # Not in weight_dict, so just logged
+      }
+
+    def compute_metrics(self, embeddings, targets):
+      """
+      Compute metrics for prototypical networks.
+
+      Args:
+          embeddings: Model embeddings
+          targets: True labels
+
+      Returns:
+          dict: Dictionary with metric names and values
+      """
+      accuracy = self.compute_accuracy(embeddings, targets)
+
+      return {
+          'acc': {
+              'value': accuracy,
+              'format': '{:.4f}'
+          }
+      }
+
+    def compute_accuracy(self, embeddings, targets):
+      """
+      Compute accuracy for prototypical networks
+
+      Args:
+          embeddings: Model embeddings
+          targets: True labels
+
+      Returns:
+          accuracy: Classification accuracy
+      """
+      targets = targets.to('cpu')
+      embeddings = embeddings.to('cpu')
+
+      classes = torch.unique(targets)
+      n_way = len(classes)
+      n_query = torch.sum(targets == classes[0]).item() - self.k_shot
+
+      prototypes = torch.stack([
+          chunk[:self.k_shot].mean(0)
+          for chunk in torch.split(embeddings, embeddings.size(0) // n_way)
+      ])
+
+      query_samples = torch.cat([
+          chunk[self.k_shot:]
+          for chunk in torch.split(embeddings, embeddings.size(0) // n_way)
+      ])
+
+      # Get query labels
+      query_labels = torch.cat([
+          torch.full((n_query,), i, dtype=torch.long)
+          for i in range(n_way)
+      ])
+
+      # Compute distances and predictions
+      dists = torch.cdist(query_samples, prototypes, p=2.0) ** 2
+      predictions = torch.argmin(dists, dim=1)
+
+      # Calculate accuracy
+      accuracy = (predictions == query_labels).float().mean().item()
+
+      return accuracy
