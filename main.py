@@ -27,6 +27,10 @@ def parse_args():
     parser.add_argument('--autoencoder_path', type=str, default=None, help='Path to pretrained autoencoder weights')
     parser.add_argument('--output_dir', type=str, default='./checkpoints', help='Directory to save model checkpoints')
     parser.add_argument('--device', type=str, default='cuda' if torch.cuda.is_available() else 'cpu', help='Device to use')
+    parser.add_argument('--early_stopping_patience', type=int, default=3,
+                        help='Number of epochs with no improvement after which training will be stopped. Default: None (no early stopping)')
+    parser.add_argument('--early_stopping_min_delta', type=float, default=0.0,
+                        help='Minimum change in validation loss to qualify as an improvement. Default: 0.0')
     return parser.parse_args()
 
 def main(args):
@@ -50,6 +54,8 @@ def main(args):
 
   # Training loop for multiple epochs
   best_val_loss = float('inf')
+  patience_counter = 0
+
   for epoch in range(args.epochs):
     # Train
     train_loss = train_one_epoch(model, criterion, train_dataloader, optimizer, args, epoch=epoch + 1)
@@ -57,9 +63,13 @@ def main(args):
     # Evaluate
     val_loss, val_accuracy = evaluate(model, criterion, val_dataloader, args, epoch=epoch + 1)
 
+    # Check if validation loss improved
+    improvement = best_val_loss - val_loss
+
     # Save best model
-    if val_loss < best_val_loss:
+    if improvement > args.early_stopping_min_delta:
       best_val_loss = val_loss
+      patience_counter = 0
       best_model_path = os.path.join(args.output_dir, args.model + '_best.pth')
       torch.save({
           'epoch': epoch + 1,
@@ -70,6 +80,16 @@ def main(args):
           'args': vars(args),
       }, best_model_path)
       print(f'Best model saved to {best_model_path} (val_loss: {val_loss:.4f})')
+    else:
+      patience_counter += 1
+      if args.early_stopping_patience is not None:
+        print(f'No improvement in validation loss for {patience_counter} epoch(s). Patience: {patience_counter}/{args.early_stopping_patience}')
+
+    # Early stopping check
+    if args.early_stopping_patience is not None and patience_counter >= args.early_stopping_patience:
+      print(f'\nEarly stopping triggered after {epoch + 1} epochs.')
+      print(f'Best validation loss: {best_val_loss:.4f}')
+      break
 
   # Save final model
   model_path = os.path.join(args.output_dir, args.model + '.pth')
