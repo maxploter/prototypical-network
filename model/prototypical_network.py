@@ -70,11 +70,11 @@ class PrototypicalAutoencoder(nn.Module):
     self.encoder = encoder
 
     self.prototypical_network = nn.Sequential(
-      nn.Linear(encoder_dim, 32),
+      nn.Linear(encoder_dim, encoder_dim//2),
       nn.ReLU(),
-      nn.Linear(32, 16),
+      nn.Linear(encoder_dim//2, encoder_dim//4),
       nn.ReLU(),
-      nn.Linear(16, 2),
+      nn.Linear(encoder_dim//4, 2),
     )
 
   def forward(self, x):

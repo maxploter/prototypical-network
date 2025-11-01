@@ -52,7 +52,16 @@ def download_kaggle_dataset(output_dir, dataset_name):
 
 def get_unique_labels(csv_path):
   df = pd.read_csv(csv_path)
-  labels = df['label'].unique()
+
+  # Detect which column name is used for labels
+  if 'label' in df.columns:
+    label_column = 'label'
+  elif 'labels' in df.columns:
+    label_column = 'labels'
+  else:
+    raise ValueError(f"Neither 'label' nor 'labels' column found in dataset. Available columns: {df.columns.tolist()}")
+
+  labels = df[label_column].unique()
   unique_labels = sorted(list(labels))
   return unique_labels
 

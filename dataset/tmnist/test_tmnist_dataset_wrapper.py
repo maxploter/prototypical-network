@@ -71,7 +71,7 @@ class TestTMNISTDataset(unittest.TestCase):
     self.assertTrue(all(label in [0, 1] for image, label in dataset), "Train dataset labels should map to class indices 0 and 1")
 
     self.assertEqual(len(dataset.targets), 3, "Targets should have 3 elements")
-    self.assertEqual(dataset.targets, [0, 1, 0], "Train dataset targets should map correctly to class indices")
+    self.assertTrue(torch.equal(dataset.targets, torch.tensor([0, 1, 0])), "Train dataset targets should map correctly to class indices")
 
     # Test that image shape matches MNIST format (1, 28, 28)
     image, label = dataset[0]
@@ -162,4 +162,3 @@ class TestTMNISTDataset(unittest.TestCase):
       # Clean up
       if csv_file_no_label.exists():
         csv_file_no_label.unlink()
-
