@@ -5,8 +5,13 @@ from dataset.tmnist import TMNISTDataset
 from torch.utils.data import RandomSampler, BatchSampler
 
 
-def build_dataset(args):
-  """Build dataset for training"""
+def build_dataset(args, split='train'):
+  """Build dataset for training or validation
+
+  Args:
+    args: Arguments containing dataset configuration
+    split: Dataset split to use ('train', 'val', or 'test')
+  """
   transform = transforms.Compose([
     transforms.ToTensor(),
     transforms.Normalize((0.1307,), (0.3081,))
@@ -15,14 +20,14 @@ def build_dataset(args):
   if args.dataset_name == 'mnist':
     dataset = datasets.MNIST(
       root='./',
-      train=(args.dataset_split == 'train'),
+      train=(split == 'train'),
       download=True,
       transform=transform
     )
   elif args.dataset_name == 'tmnist':
     dataset = TMNISTDataset(
       dataset_path=args.dataset_path,
-      split=args.dataset_split,
+      split=split,
       transform=transform
     )
   else:

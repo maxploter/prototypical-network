@@ -17,8 +17,34 @@ class TestPrototypicalLoss(unittest.TestCase):
 
         targets = torch.repeat_interleave(torch.arange(n_way), k_shot + n_query)
 
-        loss, accuracy = loss_fn(embeddings, targets)
+        # Now returns a dictionary
+        loss_dict = loss_fn(embeddings, targets)
 
+        # Check that loss_dict is a dictionary
+        self.assertIsInstance(loss_dict, dict)
+
+        # Check that required keys are present
+        self.assertIn('loss_proto', loss_dict)
+        self.assertIn('accuracy', loss_dict)
+
+        # Check loss_proto
+        loss = loss_dict['loss_proto']
         self.assertIsNotNone(loss)
         self.assertTrue(torch.is_tensor(loss))
         self.assertGreater(loss.item(), 0, "Loss should be positive")
+
+        # Check accuracy
+        accuracy = loss_dict['accuracy']
+        self.assertIsNotNone(accuracy)
+        self.assertTrue(torch.is_tensor(accuracy))
+        self.assertGreaterEqual(accuracy.item(), 0.0, "Accuracy should be >= 0")
+        self.assertLessEqual(accuracy.item(), 1.0, "Accuracy should be <= 1")
+
+    def test_weight_dict(self):
+        """Test that weight_dict is properly defined"""
+        k_shot = 1
+        loss_fn = PrototypicalLoss(k_shot=k_shot)
+
+        self.assertTrue(hasattr(loss_fn, 'weight_dict'))
+        self.assertIn('loss_proto', loss_fn.weight_dict)
+        self.assertEqual(loss_fn.weight_dict['loss_proto'], 1.0)
