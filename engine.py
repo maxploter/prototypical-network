@@ -60,11 +60,12 @@ def train_one_epoch(model, criterion, dataloader, optimizer, args, epoch=None):
         avg_loss = total_loss / (episode_idx + 1)
         postfix = {'loss': f'{avg_loss:.4f}'}
 
-        # Add individual losses to progress bar (only weighted ones)
+        # Add individual losses to progress bar (mark weighted ones with asterisk)
         for k in loss_dict.keys():
-            if k in weight_dict:
-                avg_k_loss = total_loss_dict[k] / (episode_idx + 1)
-                postfix[k] = f'{avg_k_loss:.4f}'
+            avg_k_loss = total_loss_dict[k] / (episode_idx + 1)
+            # Mark weighted losses (used for backprop) with asterisk
+            label = f'{k}*' if k in weight_dict else k
+            postfix[label] = f'{avg_k_loss:.4f}'
 
         pbar.set_postfix(postfix)
 
