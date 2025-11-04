@@ -2,7 +2,7 @@ import torch
 from tqdm import tqdm
 
 
-def train_one_epoch(model, criterion, dataloader, optimizer, args, epoch=None):
+def train_one_epoch(model, criterion, dataloader, optimizer, args, epoch=None, metrics=None):
     """
     Train the model for one epoch.
 
@@ -13,11 +13,22 @@ def train_one_epoch(model, criterion, dataloader, optimizer, args, epoch=None):
         optimizer: Optimizer for training
         args: Training arguments
         epoch: Current epoch number (optional)
+        metrics: Optional dict of metric_name -> metric_object (e.g., ignite.metrics.PSNR)
+                 Each metric should have reset(), update(output), and compute() methods
+                 where output is (y_pred, y) tuple
+
+    Returns:
+        tuple: (avg_loss, metrics_dict) where metrics_dict contains computed metric values
     """
     model.train()
 
     total_loss = 0.0
     total_loss_dict = {}
+
+    # Reset metrics at the start of epoch
+    if metrics is not None:
+        for metric in metrics.values():
+            metric.reset()
 
     # Progress bar
     desc = f'Training Epoch {epoch}' if epoch is not None else 'Training'
@@ -47,6 +58,12 @@ def train_one_epoch(model, criterion, dataloader, optimizer, args, epoch=None):
         losses.backward()
         optimizer.step()
 
+        # Update metrics (e.g., PSNR)
+        if metrics is not None:
+            with torch.no_grad():
+                for metric in metrics.values():
+                    metric.update((outputs, targets))
+
         # Accumulate losses for logging
         loss_value = losses.item()
         total_loss += loss_value
@@ -69,6 +86,12 @@ def train_one_epoch(model, criterion, dataloader, optimizer, args, epoch=None):
 
         pbar.set_postfix(postfix)
 
+    # Compute final metrics
+    metrics_dict = {}
+    if metrics is not None:
+        for name, metric in metrics.items():
+            metrics_dict[name] = metric.compute()
+
     # Print final statistics
     print(f'\nTraining complete:')
     print(f'Average Loss (weighted): {avg_loss:.4f}')
@@ -76,10 +99,16 @@ def train_one_epoch(model, criterion, dataloader, optimizer, args, epoch=None):
         avg_k_loss = total_loss_dict[k] / len(dataloader)
         print(f'Average {k}: {avg_k_loss:.4f}')
 
-    return avg_loss
+    # Print metrics
+    for name, value in metrics_dict.items():
+        if isinstance(value, torch.Tensor):
+            value = value.item()
+        print(f'{name}: {value:.4f}')
+
+    return avg_loss, metrics_dict
 
 
-def evaluate(model, criterion, dataloader, args, epoch=None):
+def evaluate(model, criterion, dataloader, args, epoch=None, metrics=None):
     """
     Evaluate the model on validation/test data.
 
@@ -89,14 +118,23 @@ def evaluate(model, criterion, dataloader, args, epoch=None):
         dataloader: DataLoader with validation/test data
         args: Training arguments
         epoch: Current epoch number (optional)
+        metrics: Optional dict of metric_name -> metric_object (e.g., ignite.metrics.PSNR)
+                 Each metric should have reset(), update(output), and compute() methods
+                 where output is (y_pred, y) tuple
 
     Returns:
-        tuple: (avg_loss, avg_loss_dict) where avg_loss_dict contains all individual losses
+        tuple: (avg_loss, avg_loss_dict, metrics_dict) where avg_loss_dict contains all individual losses
+               and metrics_dict contains computed metric values
     """
     model.eval()
 
     total_loss = 0.0
     total_loss_dict = {}
+
+    # Reset metrics at the start of evaluation
+    if metrics is not None:
+        for metric in metrics.values():
+            metric.reset()
 
     # Progress bar
     desc = f'Validation Epoch {epoch}' if epoch is not None else 'Validation'
@@ -120,6 +158,11 @@ def evaluate(model, criterion, dataloader, args, epoch=None):
             # Compute weighted loss
             losses = sum(loss_dict[k] * weight_dict[k] for k in loss_dict.keys() if k in weight_dict)
 
+            # Update metrics (e.g., PSNR)
+            if metrics is not None:
+                for metric in metrics.values():
+                    metric.update((outputs, targets))
+
             # Accumulate losses
             loss_value = losses.item()
             total_loss += loss_value
@@ -142,6 +185,12 @@ def evaluate(model, criterion, dataloader, args, epoch=None):
 
             pbar.set_postfix(postfix)
 
+    # Compute final metrics
+    metrics_dict = {}
+    if metrics is not None:
+        for name, metric in metrics.items():
+            metrics_dict[name] = metric.compute()
+
     # Print final statistics
     print(f'\nValidation complete:')
     print(f'Average Loss (weighted): {avg_loss:.4f}')
@@ -154,4 +203,10 @@ def evaluate(model, criterion, dataloader, args, epoch=None):
         is_weighted = '(weighted)' if k in weight_dict else '(unweighted)'
         print(f'Average {k} {is_weighted}: {avg_k_loss:.4f}')
 
-    return avg_loss, avg_loss_dict
+    # Print metrics
+    for name, value in metrics_dict.items():
+        if isinstance(value, torch.Tensor):
+            value = value.item()
+        print(f'{name}: {value:.4f}')
+
+    return avg_loss, avg_loss_dict, metrics_dict

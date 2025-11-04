@@ -4,3 +4,4 @@ tqdm
 jupytext
 numpy<2
 pandas
+pytorch-ignite
