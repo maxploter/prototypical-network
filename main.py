@@ -2,11 +2,13 @@ from torch.utils.data import DataLoader
 import torch
 import os
 import argparse
+import json
+from pathlib import Path
 
 from engine import train_one_epoch, evaluate
 from dataset import build_dataset, build_sampler
 from model import build_model
-from loss import build_criterion
+from loss import build_criterion, build_metrics
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Training Prototype Network")
@@ -43,6 +45,7 @@ def parse_args():
 
 def main(args):
   os.makedirs(args.output_dir, exist_ok=True)
+  output_dir = Path(args.output_dir)
 
   # Build train dataset and dataloader
   train_dataset = build_dataset(args, split='train')
@@ -58,7 +61,15 @@ def main(args):
 
   criterion = build_criterion(args)
 
+  # Build metrics (e.g., PSNR for autoencoder)
+  train_metrics = build_metrics(args)
+  val_metrics = build_metrics(args)
+
   optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+
+  # Count model parameters
+  n_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
+  print(f'Number of trainable parameters: {n_parameters:,}')
 
   # Create learning rate scheduler
   lr_scheduler = None
@@ -80,10 +91,75 @@ def main(args):
 
   for epoch in range(args.epochs):
     # Train
-    train_loss = train_one_epoch(model, criterion, train_dataloader, optimizer, args, epoch=epoch + 1)
+    train_loss, train_metrics_dict = train_one_epoch(
+        model, criterion, train_dataloader, optimizer, args,
+        epoch=epoch + 1, metrics=train_metrics
+    )
 
     # Evaluate
-    val_loss, val_accuracy = evaluate(model, criterion, val_dataloader, args, epoch=epoch + 1)
+    val_loss, val_loss_dict, val_metrics_dict = evaluate(
+        model, criterion, val_dataloader, args,
+        epoch=epoch + 1, metrics=val_metrics
+    )
+
+    # Get validation accuracy if available (for backward compatibility)
+    val_accuracy = val_loss_dict.get('accuracy', 0.0)
+
+    # Prepare log stats
+    log_stats = {
+        'epoch': epoch + 1,
+        'n_parameters': n_parameters,
+        'train_loss': train_loss,
+        'val_loss': val_loss,
+    }
+
+    # Add train metrics
+    for k, v in train_metrics_dict.items():
+        if isinstance(v, torch.Tensor):
+            v = v.item()
+        log_stats[f'train_{k}'] = v
+
+    # Add validation loss components
+    for k, v in val_loss_dict.items():
+        log_stats[f'val_{k}'] = v
+
+    # Add validation metrics
+    for k, v in val_metrics_dict.items():
+        if isinstance(v, torch.Tensor):
+            v = v.item()
+        log_stats[f'val_{k}'] = v
+
+    # Add learning rate
+    current_lr = optimizer.param_groups[0]['lr']
+    log_stats['lr'] = current_lr
+
+    # Write log stats to file
+    with (output_dir / "log.txt").open("a") as f:
+        f.write(json.dumps(log_stats) + "\n")
+
+    # Print epoch summary with all metrics
+    print(f'\nEpoch {epoch + 1} Summary:')
+    print(f'  Train Loss: {train_loss:.4f}')
+    print(f'  Val Loss: {val_loss:.4f}')
+
+    # Print all training metrics
+    if train_metrics_dict:
+        for k, v in train_metrics_dict.items():
+            if isinstance(v, torch.Tensor):
+                v = v.item()
+            print(f'  Train {k}: {v:.4f}')
+
+    # Print all validation loss components
+    if val_loss_dict:
+        for k, v in val_loss_dict.items():
+            print(f'  Val {k}: {v:.4f}')
+
+    # Print all validation metrics
+    if val_metrics_dict:
+        for k, v in val_metrics_dict.items():
+            if isinstance(v, torch.Tensor):
+                v = v.item()
+            print(f'  Val {k}: {v:.4f}')
 
     # Update learning rate scheduler
     if lr_scheduler is not None:
@@ -104,19 +180,26 @@ def main(args):
       best_val_loss = val_loss
       patience_counter = 0
       best_model_path = os.path.join(args.output_dir, args.model + '_best.pth')
-      torch.save({
+
+      # Prepare checkpoint data
+      checkpoint = {
           'epoch': epoch + 1,
           'model': model.state_dict(),
           'optimizer': optimizer.state_dict(),
           'val_loss': val_loss,
-          'val_accuracy': val_accuracy,
+          'val_loss_dict': val_loss_dict,
+          'val_metrics': val_metrics_dict,
           'args': vars(args),
-      }, best_model_path)
-      print(f'Best model saved to {best_model_path} (val_loss: {val_loss:.4f})')
+      }
+
+      torch.save(checkpoint, best_model_path)
+
+      # Print save message
+      print(f'\n✓ Best model saved to {best_model_path}')
     else:
       patience_counter += 1
       if args.early_stopping_patience is not None:
-        print(f'No improvement in validation loss for {patience_counter} epoch(s). Patience: {patience_counter}/{args.early_stopping_patience}')
+        print(f'\nNo improvement in validation loss for {patience_counter} epoch(s). Patience: {patience_counter}/{args.early_stopping_patience}')
 
     # Early stopping check
     if args.early_stopping_patience is not None and patience_counter >= args.early_stopping_patience:
