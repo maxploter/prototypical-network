@@ -8,7 +8,8 @@ from pathlib import Path
 from engine import train_one_epoch, evaluate
 from dataset import build_dataset, build_sampler
 from model import build_model
-from loss import build_criterion, build_metrics
+from loss import build_criterion
+from loss.build_metrics import build_metrics
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Training Prototype Network")
