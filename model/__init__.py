@@ -1,13 +1,16 @@
-from model.prototypical_network import PrototypicalCnnNetwork, PrototypicalAutoencoder
-from model.autoencoder import Autoencoder
 import torch
+
+from model.autoencoder import Autoencoder
+from model.prototypical_network import PrototypicalCnnNetwork, PrototypicalAutoencoder
+from utils import is_thresholded_dataset
 
 
 def build_model(args):
     if args.model == 'prototypical_cnn':
         model = PrototypicalCnnNetwork(embedding_dim=args.embedding_dim)
     elif args.model == 'prototypical_autoencoder':
-        autoencoder = Autoencoder(encoding_dim=args.embedding_dim)
+      # Old models were trained with sigmoid activation (return_logits=False)
+      autoencoder = Autoencoder(encoding_dim=args.embedding_dim, return_logits=False)
 
         # Load pretrained weights if provided
         if args.autoencoder_path:
@@ -29,7 +32,14 @@ def build_model(args):
 
         model = PrototypicalAutoencoder(encoder=autoencoder.encoder, encoder_dim=args.embedding_dim)
     elif args.model == 'autoencoder':
-        model = Autoencoder(encoding_dim=args.embedding_dim)
+      # Determine whether to return logits or sigmoid output
+      return_logits = False  # Default for backward compatibility (sigmoid + MSE)
+
+      if args.dataset_name == 'tmnist':
+        # For thresholded datasets, return logits for BCEWithLogitsLoss
+        return_logits = is_thresholded_dataset(args.dataset_name, args.dataset_path)
+
+      model = Autoencoder(encoding_dim=args.embedding_dim, return_logits=return_logits)
     else:
         raise ValueError(f"Unknown model type: {args.model}.")
 

@@ -4,6 +4,7 @@ from torchvision import datasets, transforms
 from dataset.autoencoder_dataset import AutoencoderDataset
 from dataset.episode_sampler import EpisodeSampler
 from dataset.tmnist import TMNISTDataset
+from utils import is_thresholded_dataset
 
 
 def build_dataset(args, split='train'):
@@ -27,7 +28,7 @@ def build_dataset(args, split='train'):
     )
   elif args.dataset_name == 'tmnist':
     # Check if dataset is thresholded (binary) or original (grayscale)
-    is_thresholded = 'thresholded' in str(args.dataset_path).lower()  # TODO: it should not be based on path string
+    is_thresholded = is_thresholded_dataset(args.dataset_name, args.dataset_path)
 
     if is_thresholded:
       transform = transforms.Compose([
