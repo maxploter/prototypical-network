@@ -65,18 +65,15 @@ def parse_args():
     return parser.parse_args()
 
 def main(args):
-  # Set random seeds for reproducibility
   set_seed(args.seed)
 
   os.makedirs(args.output_dir, exist_ok=True)
   output_dir = Path(args.output_dir)
 
-  # Build train dataset and dataloader
   train_dataset = build_dataset(args, split='train')
   train_sampler = build_sampler(args, train_dataset)
   train_dataloader = DataLoader(train_dataset, batch_sampler=train_sampler)
 
-  # Build validation dataset and dataloader
   val_dataset = build_dataset(args, split='val')
   val_sampler = build_sampler(args, val_dataset)
   val_dataloader = DataLoader(val_dataset, batch_sampler=val_sampler)
@@ -85,13 +82,11 @@ def main(args):
 
   criterion = build_criterion(args)
 
-  # Build metrics (e.g., PSNR for autoencoder)
   train_metrics = build_metrics(args)
   val_metrics = build_metrics(args)
 
   optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
-  # Count model parameters
   n_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
   print(f'Number of trainable parameters: {n_parameters:,}')
 
