@@ -1,7 +1,9 @@
 """
 Builder function for creating metrics based on model type.
 """
-from ignite.metrics import PSNR
+from loss.metrics import ROC_AUC
+
+from utils import is_thresholded_dataset
 
 
 def build_metrics(args):
@@ -16,18 +18,17 @@ def build_metrics(args):
     """
     metrics = None
 
-    # PSNR is only needed for autoencoder training
+    # Metrics are only needed for autoencoder training
     if args.model in ['autoencoder']:
-        # For normalized data with mean=0.1307, std=0.3081:
-        # min ≈ (0 - 0.1307) / 0.3081 ≈ -0.424
-        # max ≈ (1 - 0.1307) / 0.3081 ≈ 2.821
-        # data_range = max - min ≈ 3.245
-        data_range = (1.0 - 0.1307) / 0.3081 - (0.0 - 0.1307) / 0.3081
+      # Check if we're working with thresholded (binary) data
+      is_thresholded = is_thresholded_dataset(args.dataset_name, args.dataset_path)
 
+      if is_thresholded:
+        # For thresholded/binary datasets, use ROC-AUC for classification performance
         metrics = {
-            'psnr': PSNR(data_range=data_range, device=args.device)
+          'roc_auc': ROC_AUC(device=args.device)
         }
-        print(f'Using metrics for {args.model}: {list(metrics.keys())}')
-        print(f'PSNR data_range set to {data_range:.4f} for normalized data')
+        print(f'Using metrics for {args.model} with thresholded data: {list(metrics.keys())}')
+        print('ROC-AUC metric will assess binary classification performance')
 
     return metrics
