@@ -3,6 +3,29 @@ import pandas as pd
 import numpy as np
 from pathlib import Path
 import os
+from skimage.filters import threshold_otsu
+from tqdm import tqdm
+
+
+def get_label_column(df):
+  """
+  Detect which column name is used for labels in the dataframe.
+
+  Args:
+    df: pandas DataFrame
+
+  Returns:
+    str: The name of the label column ('label' or 'labels')
+
+  Raises:
+    ValueError: If neither 'label' nor 'labels' column is found
+  """
+  if 'label' in df.columns:
+    return 'label'
+  elif 'labels' in df.columns:
+    return 'labels'
+  else:
+    raise ValueError(f"Neither 'label' nor 'labels' column found in dataset. Available columns: {df.columns.tolist()}")
 
 
 def download_kaggle_dataset(output_dir, dataset_name):
@@ -53,13 +76,7 @@ def download_kaggle_dataset(output_dir, dataset_name):
 def get_unique_labels(csv_path):
   df = pd.read_csv(csv_path)
 
-  # Detect which column name is used for labels
-  if 'label' in df.columns:
-    label_column = 'label'
-  elif 'labels' in df.columns:
-    label_column = 'labels'
-  else:
-    raise ValueError(f"Neither 'label' nor 'labels' column found in dataset. Available columns: {df.columns.tolist()}")
+  label_column = get_label_column(df)
 
   labels = df[label_column].unique()
   unique_labels = sorted(list(labels))
@@ -104,6 +121,72 @@ def save_splits_to_files(train_labels, val_labels, test_labels, output_dir):
       f.write(f"{label}\n")
 
 
+def otsu_binarize_image(image_array):
+  """
+  Apply Otsu's method to binarize a grayscale image.
+
+  Args:
+    image_array: 1D array representing pixel values of an image
+
+  Returns:
+    Binary image array (0 or 1)
+  """
+  # Use scikit-image's threshold_otsu for more efficient computation
+  # Reshape to 2D if needed (threshold_otsu works on any shape)
+  threshold = threshold_otsu(image_array)
+
+  # Apply threshold - return 0 or 1 (not 0 or 255)
+  binary_image = (image_array > threshold).astype(np.uint8)
+
+  return binary_image
+
+
+def apply_otsu_to_dataset(csv_path, output_path):
+  """
+  Apply Otsu's method to all images in the dataset and save to a new CSV.
+
+  Args:
+    csv_path: Path to the original CSV file
+    output_path: Path to save the binarized CSV file
+  """
+  print(f"Loading dataset from {csv_path}...")
+  df = pd.read_csv(csv_path)
+
+  label_column = get_label_column(df)
+
+  # Get the label column index
+  label_idx = df.columns.get_loc(label_column)
+
+  # Metadata columns are all columns up to and including the label column
+  metadata_columns = df.columns[:label_idx + 1].tolist()
+
+  # Pixel columns are all columns after the label column
+  pixel_columns = df.columns[label_idx + 1:].tolist()
+
+  # Extract metadata and pixel data separately
+  metadata_df = df[metadata_columns]
+  pixel_data = df[pixel_columns].values
+
+  print(f"Applying Otsu's method to {len(pixel_data)} images...")
+  binary_data = np.zeros_like(pixel_data)
+
+  for i in tqdm(range(len(pixel_data)), desc="Binarizing images"):
+    binary_data[i] = otsu_binarize_image(pixel_data[i])
+
+  # Create new dataframe with binarized data
+  binary_df = pd.DataFrame(binary_data, columns=pixel_columns)
+
+  # Prepend metadata columns to the binary dataframe
+  for col in reversed(metadata_columns):
+    binary_df.insert(0, col, metadata_df[col])
+
+  print(f"Saving binarized dataset to {output_path}...")
+  binary_df.to_csv(output_path, index=False)
+  print(f"Binary dataset saved successfully!")
+
+  return output_path
+
+
 def process(dataset_dir, dataset_name, train_ratio=0.64, val_ratio=0.16, test_ratio=0.20):
   dataset_dir = Path(dataset_dir)
 
@@ -118,6 +201,16 @@ def process(dataset_dir, dataset_name, train_ratio=0.64, val_ratio=0.16, test_ra
 
   # Use the first found CSV file
   csv_file = csv_files[0]
+
+  # Check if thresholded dataset already exists
+  thresholded_csv_path = dataset_dir / f"{csv_file.stem}_thresholded.csv"
+  if thresholded_csv_path.exists():
+    print(f"Thresholded dataset already exists at {thresholded_csv_path}, using it.")
+    csv_file = thresholded_csv_path
+  else:
+    # Apply Otsu's method to create thresholded dataset
+    print(f"Thresholded dataset not found. Creating one with Otsu's method...")
+    csv_file = apply_otsu_to_dataset(csv_file, thresholded_csv_path)
 
   unique_labels = get_unique_labels(csv_file)
 
@@ -146,8 +239,3 @@ def main(args):
 
   dataset_dir = download_kaggle_dataset(output_dir, args.dataset_name)
   process(dataset_dir, args.dataset_name)
-
-
-if __name__ == "__main__":
-  args = parse_args()
-  main(args)
