@@ -1,7 +1,7 @@
 """
 Builder function for creating metrics based on model type.
 """
-from loss.metrics import ROC_AUC
+from ignite.metrics import ROC_AUC
 
 from utils import is_thresholded_dataset
 
