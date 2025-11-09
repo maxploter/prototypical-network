@@ -2,6 +2,7 @@ from torch.utils.data import RandomSampler, BatchSampler
 from torchvision import datasets, transforms
 
 from dataset.autoencoder_dataset import AutoencoderDataset
+from dataset.dataset_reduction import apply_dataset_reduction
 from dataset.episode_sampler import EpisodeSampler
 from dataset.tmnist import TMNISTDataset
 from utils import is_thresholded_dataset
@@ -47,6 +48,15 @@ def build_dataset(args, split='train'):
     )
   else:
     raise ValueError(f"Unknown dataset: {args.dataset_name}. Supported: 'mnist', 'tmnist'")
+
+  # Apply dataset reduction if specified (only for training split)
+  if split == 'train' and hasattr(args, 'dataset_reduction') and args.dataset_reduction < 1.0:
+    reduction_strategy = getattr(args, 'dataset_reduction_strategy', 'percentage')
+    dataset = apply_dataset_reduction(
+      dataset,
+      reduction_factor=args.dataset_reduction,
+      strategy=reduction_strategy
+    )
 
   # Wrap with autoencoder dataset if using autoencoder model
   if args.model == 'autoencoder':

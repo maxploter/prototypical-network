@@ -1,15 +1,19 @@
-from torch.utils.data import DataLoader
-import torch
-import os
 import argparse
 import json
+import os
+import random
 from pathlib import Path
 
-from engine import train_one_epoch, evaluate
+import numpy as np
+import torch
+from torch.utils.data import DataLoader
+
 from dataset import build_dataset, build_sampler
-from model import build_model
+from engine import train_one_epoch, evaluate
 from loss import build_criterion
 from loss.build_metrics import build_metrics
+from model import build_model
+
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Training Prototype Network")
@@ -30,6 +34,23 @@ def parse_args():
     parser.add_argument('--autoencoder_path', type=str, default=None, help='Path to pretrained autoencoder weights')
     parser.add_argument('--output_dir', type=str, default='./checkpoints', help='Directory to save model checkpoints')
     parser.add_argument('--device', type=str, default='cuda' if torch.cuda.is_available() else 'cpu', help='Device to use')
+
+    # Global seed for reproducibility
+    parser.add_argument('--seed', type=int, default=42,
+                        help='Random seed for reproducibility (controls all random operations)')
+
+    # Dataset reduction arguments
+    parser.add_argument('--dataset_reduction', type=float, default=1.0,
+                        help='Fraction of training dataset to use (0.0-1.0). Default: 1.0 (use full dataset). '
+                             'Example: 0.5 uses 50%% of the data, 0.2 uses 20%%')
+    parser.add_argument('--dataset_reduction_strategy', type=str, default='percentage',
+                        choices=['percentage', 'class_variability', 'stratified'],
+                        help='Strategy for dataset reduction: '
+                             'percentage (random sampling), '
+                             'class_variability (remove classes), '
+                             'stratified (maintain class distribution)')
+
+    # Early stopping and scheduler arguments
     parser.add_argument('--early_stopping_patience', type=int, default=3,
                         help='Number of epochs with no improvement after which training will be stopped. Default: None (no early stopping)')
     parser.add_argument('--early_stopping_min_delta', type=float, default=0.0,
@@ -45,6 +66,19 @@ def parse_args():
     return parser.parse_args()
 
 def main(args):
+  # Set random seeds for reproducibility
+  torch.manual_seed(args.seed)
+  np.random.seed(args.seed)
+  random.seed(args.seed)
+  if torch.cuda.is_available():
+    torch.cuda.manual_seed(args.seed)
+    torch.cuda.manual_seed_all(args.seed)
+    # For completely deterministic behavior (may impact performance)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
+  print(f'Random seed set to: {args.seed}')
+
   os.makedirs(args.output_dir, exist_ok=True)
   output_dir = Path(args.output_dir)
 
