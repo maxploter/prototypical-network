@@ -1,10 +1,8 @@
 import argparse
 import json
 import os
-import random
 from pathlib import Path
 
-import numpy as np
 import torch
 from torch.utils.data import DataLoader
 
@@ -13,6 +11,7 @@ from engine import train_one_epoch, evaluate
 from loss import build_criterion
 from loss.build_metrics import build_metrics
 from model import build_model
+from utils.misc import set_seed
 
 
 def parse_args():
@@ -67,17 +66,7 @@ def parse_args():
 
 def main(args):
   # Set random seeds for reproducibility
-  torch.manual_seed(args.seed)
-  np.random.seed(args.seed)
-  random.seed(args.seed)
-  if torch.cuda.is_available():
-    torch.cuda.manual_seed(args.seed)
-    torch.cuda.manual_seed_all(args.seed)
-    # For completely deterministic behavior (may impact performance)
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
-
-  print(f'Random seed set to: {args.seed}')
+  set_seed(args.seed)
 
   os.makedirs(args.output_dir, exist_ok=True)
   output_dir = Path(args.output_dir)
