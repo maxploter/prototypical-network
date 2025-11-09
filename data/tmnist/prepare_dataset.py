@@ -239,3 +239,8 @@ def main(args):
 
   dataset_dir = download_kaggle_dataset(output_dir, args.dataset_name)
   process(dataset_dir, args.dataset_name)
+
+
+if __name__ == '__main__':
+  args = parse_args()
+  main(args)
