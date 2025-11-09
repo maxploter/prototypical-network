@@ -1,8 +1,10 @@
-from torchvision import datasets, transforms
-from dataset.episode_sampler import EpisodeSampler
-from dataset.autoencoder_dataset import AutoencoderDataset
-from dataset.tmnist import TMNISTDataset
 from torch.utils.data import RandomSampler, BatchSampler
+from torchvision import datasets, transforms
+
+from dataset.autoencoder_dataset import AutoencoderDataset
+from dataset.episode_sampler import EpisodeSampler
+from dataset.tmnist import TMNISTDataset
+from utils import is_thresholded_dataset
 
 
 def build_dataset(args, split='train'):
@@ -12,12 +14,12 @@ def build_dataset(args, split='train'):
     args: Arguments containing dataset configuration
     split: Dataset split to use ('train', 'val', or 'test')
   """
-  transform = transforms.Compose([
-    transforms.ToTensor(),
-    transforms.Normalize((0.1307,), (0.3081,))
-  ])
-
   if args.dataset_name == 'mnist':
+    # MNIST uses standard grayscale normalization (0-255 -> 0-1 -> normalized)
+    transform = transforms.Compose([
+      transforms.ToTensor(),
+      transforms.Normalize((0.1307,), (0.3081,))
+    ])
     dataset = datasets.MNIST(
       root='./',
       train=(split == 'train'),
@@ -25,6 +27,19 @@ def build_dataset(args, split='train'):
       transform=transform
     )
   elif args.dataset_name == 'tmnist':
+    # Check if dataset is thresholded (binary) or original (grayscale)
+    is_thresholded = is_thresholded_dataset(args.dataset_name, args.dataset_path)
+
+    if is_thresholded:
+      transform = transforms.Compose([
+        transforms.ToTensor(),
+      ])
+    else:
+      transform = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize((0.1307,), (0.3081,))
+      ])
+
     dataset = TMNISTDataset(
       dataset_path=args.dataset_path,
       split=split,
