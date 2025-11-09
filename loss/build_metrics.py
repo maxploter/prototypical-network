@@ -22,12 +22,19 @@ class ROCAUCPreprocessor:
 
     Returns:
         Preprocessed (predictions, targets) tuple with flattened tensors
+        or None if ROC-AUC cannot be computed (only one class present)
     """
     y_pred, y = output
 
     # Flatten image tensors for pixel-wise evaluation
     y_pred = y_pred.flatten()
     y = y.flatten()
+
+    # Check if both classes are present
+    # ROC-AUC is undefined if only one class exists
+    unique_classes = y.unique()
+    if len(unique_classes) < 2:
+      return None
 
     return (y_pred, y)
 
@@ -60,11 +67,15 @@ class MetricWithPreprocessor:
     """
     # Preprocess the output
     preprocessed_output = self.preprocessor(output)
+
+    # Skip update if preprocessor returns None (e.g., only one class present)
+    if preprocessed_output is None:
+      return
+
     # Update the metric
     self.metric.update(preprocessed_output)
 
   def compute(self):
-    """Compute the final metric value."""
     return self.metric.compute()
 
 

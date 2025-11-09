@@ -1,9 +1,10 @@
+from pathlib import Path
+
+import numpy as np
 import pandas as pd
 import torch
-from torch.utils.data import Dataset
-from pathlib import Path
-import numpy as np
 from PIL import Image
+from torch.utils.data import Dataset
 
 
 class TMNISTDataset(Dataset):
@@ -121,9 +122,7 @@ class TMNISTDataset(Dataset):
     if self.transform:
       image = self.transform(image)
     else:
-      # Default: convert to tensor
-      image = torch.from_numpy(np.array(image)).float().unsqueeze(0) / 255.0
-
+      image = torch.from_numpy(np.array(image)).float().unsqueeze(0)
     return image, class_idx
 
   def get_labels(self):
