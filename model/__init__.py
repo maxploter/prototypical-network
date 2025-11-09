@@ -6,42 +6,42 @@ from utils import is_thresholded_dataset
 
 
 def build_model(args):
-    if args.model == 'prototypical_cnn':
-        model = PrototypicalCnnNetwork(embedding_dim=args.embedding_dim)
-    elif args.model == 'prototypical_autoencoder':
-      # Old models were trained with sigmoid activation (return_logits=False)
-      autoencoder = Autoencoder(encoding_dim=args.embedding_dim, return_logits=False)
+  if args.model == 'prototypical_cnn':
+    model = PrototypicalCnnNetwork(embedding_dim=args.embedding_dim)
+  elif args.model == 'prototypical_autoencoder':
+    # Old models were trained with sigmoid activation (return_logits=False)
+    autoencoder = Autoencoder(encoding_dim=args.embedding_dim, return_logits=False)
 
-        # Load pretrained weights if provided
-        if args.autoencoder_path:
-            print(f"Loading autoencoder weights from {args.autoencoder_path}")
-            checkpoint = torch.load(args.autoencoder_path)
+    # Load pretrained weights if provided
+    if args.autoencoder_path:
+      print(f"Loading autoencoder weights from {args.autoencoder_path}")
+      checkpoint = torch.load(args.autoencoder_path)
 
-            # Handle different checkpoint formats
-            if 'model' in checkpoint:
-                autoencoder.load_state_dict(checkpoint['model'])
-            else:
-                autoencoder.load_state_dict(checkpoint)
+      # Handle different checkpoint formats
+      if 'model' in checkpoint:
+        autoencoder.load_state_dict(checkpoint['model'])
+      else:
+        autoencoder.load_state_dict(checkpoint)
 
-            print("Autoencoder weights loaded successfully")
+      print("Autoencoder weights loaded successfully")
 
-            # Freeze the autoencoder
-            for param in autoencoder.parameters():
-                param.requires_grad = False
-            print("Autoencoder frozen (parameters set to requires_grad=False)")
+      # Freeze the autoencoder
+      for param in autoencoder.parameters():
+        param.requires_grad = False
+      print("Autoencoder frozen (parameters set to requires_grad=False)")
 
-        model = PrototypicalAutoencoder(encoder=autoencoder.encoder, encoder_dim=args.embedding_dim)
-    elif args.model == 'autoencoder':
-      # Determine whether to return logits or sigmoid output
-      return_logits = False  # Default for backward compatibility (sigmoid + MSE)
+    model = PrototypicalAutoencoder(encoder=autoencoder.encoder, encoder_dim=args.embedding_dim)
+  elif args.model == 'autoencoder':
+    # Determine whether to return logits or sigmoid output
+    return_logits = False  # Default for backward compatibility (sigmoid + MSE)
 
-      if args.dataset_name == 'tmnist':
-        # For thresholded datasets, return logits for BCEWithLogitsLoss
-        return_logits = is_thresholded_dataset(args.dataset_name, args.dataset_path)
+    if args.dataset_name == 'tmnist':
+      # For thresholded datasets, return logits for BCEWithLogitsLoss
+      return_logits = is_thresholded_dataset(args.dataset_name, args.dataset_path)
 
-      model = Autoencoder(encoding_dim=args.embedding_dim, return_logits=return_logits)
-    else:
-        raise ValueError(f"Unknown model type: {args.model}.")
+    model = Autoencoder(encoding_dim=args.embedding_dim, return_logits=return_logits)
+  else:
+    raise ValueError(f"Unknown model type: {args.model}.")
 
-    model = model.to(args.device)
-    return model
+  model = model.to(args.device)
+  return model
