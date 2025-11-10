@@ -29,12 +29,7 @@ class ROCAUCPreprocessor:
     # Flatten image tensors for pixel-wise evaluation
     y_pred = y_pred.flatten()
     y = y.flatten()
-
-    # Check if both classes are present
-    # ROC-AUC is undefined if only one class exists
-    unique_classes = y.unique()
-    if len(unique_classes) < 2:
-      return None
+    y = y.int()
 
     return (y_pred, y)
 
