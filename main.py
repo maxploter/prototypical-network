@@ -1,15 +1,18 @@
-from torch.utils.data import DataLoader
-import torch
-import os
 import argparse
 import json
+import os
 from pathlib import Path
 
-from engine import train_one_epoch, evaluate
+import torch
+from torch.utils.data import DataLoader
+
 from dataset import build_dataset, build_sampler
-from model import build_model
+from engine import train_one_epoch, evaluate
 from loss import build_criterion
 from loss.build_metrics import build_metrics
+from model import build_model
+from utils.misc import set_seed
+
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Training Prototype Network")
@@ -30,6 +33,23 @@ def parse_args():
     parser.add_argument('--autoencoder_path', type=str, default=None, help='Path to pretrained autoencoder weights')
     parser.add_argument('--output_dir', type=str, default='./checkpoints', help='Directory to save model checkpoints')
     parser.add_argument('--device', type=str, default='cuda' if torch.cuda.is_available() else 'cpu', help='Device to use')
+
+    # Global seed for reproducibility
+    parser.add_argument('--seed', type=int, default=42,
+                        help='Random seed for reproducibility (controls all random operations)')
+
+    # Dataset reduction arguments
+    parser.add_argument('--dataset_reduction', type=float, default=1.0,
+                        help='Fraction of training dataset to use (0.0-1.0). Default: 1.0 (use full dataset). '
+                             'Example: 0.5 uses 50%% of the data, 0.2 uses 20%%')
+    parser.add_argument('--dataset_reduction_strategy', type=str, default='percentage',
+                        choices=['percentage', 'class_variability', 'stratified'],
+                        help='Strategy for dataset reduction: '
+                             'percentage (random sampling), '
+                             'class_variability (remove classes), '
+                             'stratified (maintain class distribution)')
+
+    # Early stopping and scheduler arguments
     parser.add_argument('--early_stopping_patience', type=int, default=3,
                         help='Number of epochs with no improvement after which training will be stopped. Default: None (no early stopping)')
     parser.add_argument('--early_stopping_min_delta', type=float, default=0.0,
@@ -45,15 +65,15 @@ def parse_args():
     return parser.parse_args()
 
 def main(args):
+  set_seed(args.seed)
+
   os.makedirs(args.output_dir, exist_ok=True)
   output_dir = Path(args.output_dir)
 
-  # Build train dataset and dataloader
   train_dataset = build_dataset(args, split='train')
   train_sampler = build_sampler(args, train_dataset)
   train_dataloader = DataLoader(train_dataset, batch_sampler=train_sampler)
 
-  # Build validation dataset and dataloader
   val_dataset = build_dataset(args, split='val')
   val_sampler = build_sampler(args, val_dataset)
   val_dataloader = DataLoader(val_dataset, batch_sampler=val_sampler)
@@ -62,13 +82,11 @@ def main(args):
 
   criterion = build_criterion(args)
 
-  # Build metrics (e.g., PSNR for autoencoder)
   train_metrics = build_metrics(args)
   val_metrics = build_metrics(args)
 
   optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
 
-  # Count model parameters
   n_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
   print(f'Number of trainable parameters: {n_parameters:,}')
 
@@ -182,14 +200,27 @@ def main(args):
       patience_counter = 0
       best_model_path = os.path.join(args.output_dir, args.model + '_best.pth')
 
+      def to_python_type(value):
+        """Convert numpy/torch scalars to native Python types."""
+        if isinstance(value, torch.Tensor):
+          return value.item()
+        elif hasattr(value, 'item'):  # numpy scalar
+          return value.item()
+        elif isinstance(value, dict):
+          return {k: to_python_type(v) for k, v in value.items()}
+        elif isinstance(value, (list, tuple)):
+          return type(value)(to_python_type(v) for v in value)
+        else:
+          return value
+
       # Prepare checkpoint data
       checkpoint = {
           'epoch': epoch + 1,
           'model': model.state_dict(),
           'optimizer': optimizer.state_dict(),
-          'val_loss': val_loss,
-          'val_loss_dict': val_loss_dict,
-          'val_metrics': val_metrics_dict,
+        'val_loss': float(val_loss),
+        'val_loss_dict': to_python_type(val_loss_dict),
+        'val_metrics': to_python_type(val_metrics_dict),
           'args': vars(args),
       }
 

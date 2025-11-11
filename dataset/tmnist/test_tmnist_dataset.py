@@ -1,11 +1,12 @@
+import csv
 import unittest
+from pathlib import Path
 from random import randint
 
 import torch
-import csv
-from pathlib import Path
-from dataset.tmnist.tmnist_dataset import TMNISTDataset
 from torchvision import transforms
+
+from dataset.tmnist.tmnist_dataset import TMNISTDataset
 
 
 class TestTMNISTDataset(unittest.TestCase):
@@ -38,6 +39,22 @@ class TestTMNISTDataset(unittest.TestCase):
         row.extend([str((idx * 37 + i * 13) % 256) for i in range(28 * 28)])
         writer.writerow(row)
 
+    # Create thresholded CSV file with binary (0 and 1) pixel values
+    cls.csv_file_thresholded = test_dir / "tmnist_thresholded.csv"
+    with open(cls.csv_file_thresholded, 'w', newline='') as f:
+      writer = csv.writer(f)
+
+      # Reuse the same header from above
+      writer.writerow(header)
+
+      # Create 5 rows with binary pixel values (0 or 1)
+      for idx, class_label in enumerate(classes):
+        row = [f"opt_{i}" for i in range(n_random_headers)]
+        row.append(class_label)
+        # Add 784 binary pixel values (0 or 1)
+        row.extend([str((idx + i) % 2) for i in range(28 * 28)])
+        writer.writerow(row)
+
     # Create train_labels.txt with classes e, 3 (one per line)
     train_labels_file = cls.csv_file.parent / "train_labels.txt"
     with open(train_labels_file, 'w') as f:
@@ -55,6 +72,9 @@ class TestTMNISTDataset(unittest.TestCase):
     # Remove created test files
     if cls.csv_file.exists():
       cls.csv_file.unlink()
+
+    if cls.csv_file_thresholded.exists():
+      cls.csv_file_thresholded.unlink()
 
     train_labels_file = cls.csv_file.parent / "train_labels.txt"
     if train_labels_file.exists():
@@ -162,3 +182,28 @@ class TestTMNISTDataset(unittest.TestCase):
       # Clean up
       if csv_file_no_label.exists():
         csv_file_no_label.unlink()
+
+  def test_thresholded_dataset_preserves_binary_values(self):
+    """Test that thresholded datasets with binary values (0 and 1) are preserved correctly."""
+    # Load the thresholded dataset with the same transform used in production
+    # (transforms.ToTensor() as defined in dataset/__init__.py for thresholded datasets)
+    dataset = TMNISTDataset(
+      dataset_path=self.csv_file_thresholded,
+      split='train',
+      transform=None
+    )
+
+    self.assertEqual(len(dataset), 3, "Thresholded dataset should have 3 samples")
+
+    # Check that all pixel values are either 0.0 or 1.0
+    for idx in range(len(dataset)):
+      image, label = dataset[idx]
+
+      # Get unique values in the image
+      unique_values = torch.unique(image)
+
+      # All values should be either 0.0 or 1.0 (not 0.0 and 0.0039 which would indicate division by 255)
+      self.assertTrue(
+        all(val in [0.0, 1.0] for val in unique_values.tolist()),
+        f"Image {idx} should only contain binary values 0.0 and 1.0, but got: {unique_values.tolist()}"
+      )
