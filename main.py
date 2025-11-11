@@ -200,14 +200,27 @@ def main(args):
       patience_counter = 0
       best_model_path = os.path.join(args.output_dir, args.model + '_best.pth')
 
+      def to_python_type(value):
+        """Convert numpy/torch scalars to native Python types."""
+        if isinstance(value, torch.Tensor):
+          return value.item()
+        elif hasattr(value, 'item'):  # numpy scalar
+          return value.item()
+        elif isinstance(value, dict):
+          return {k: to_python_type(v) for k, v in value.items()}
+        elif isinstance(value, (list, tuple)):
+          return type(value)(to_python_type(v) for v in value)
+        else:
+          return value
+
       # Prepare checkpoint data
       checkpoint = {
           'epoch': epoch + 1,
           'model': model.state_dict(),
           'optimizer': optimizer.state_dict(),
-          'val_loss': val_loss,
-          'val_loss_dict': val_loss_dict,
-          'val_metrics': val_metrics_dict,
+        'val_loss': float(val_loss),
+        'val_loss_dict': to_python_type(val_loss_dict),
+        'val_metrics': to_python_type(val_metrics_dict),
           'args': vars(args),
       }
 
