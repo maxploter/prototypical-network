@@ -33,7 +33,7 @@ def load_trained_model(checkpoint_path, device=None):
   if device is None:
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
-  checkpoint = torch.load(checkpoint_path, map_location=device)
+  checkpoint = torch.load(checkpoint_path)
 
   # Extract args from checkpoint
   if 'args' not in checkpoint:
@@ -134,7 +134,7 @@ def create_args_from_checkpoint(checkpoint_path):
       >>> print(f"Learning rate: {args.lr}")
       >>> print(f"Embedding dim: {args.embedding_dim}")
   """
-  checkpoint = torch.load(checkpoint_path, map_location='cpu')
+  checkpoint = torch.load(checkpoint_path)
 
   if 'args' not in checkpoint:
     raise ValueError(f"Checkpoint at {checkpoint_path} does not contain 'args'.")
