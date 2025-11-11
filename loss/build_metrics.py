@@ -1,7 +1,7 @@
 """
 Builder function for creating metrics based on model type.
 """
-from ignite.metrics import ROC_AUC
+from ignite.metrics import ROC_AUC, Accuracy
 
 from utils import is_thresholded_dataset
 
@@ -29,6 +29,42 @@ class ROCAUCPreprocessor:
     # Flatten image tensors for pixel-wise evaluation
     y_pred = y_pred.flatten()
     y = y.flatten()
+    y = y.int()
+
+    return (y_pred, y)
+
+
+class AccuracyPreprocessor:
+  """
+  Preprocessor for Accuracy metric on image reconstruction tasks.
+  Flattens image tensors and applies threshold for pixel-wise binary classification.
+  """
+
+  def __init__(self, threshold=0.5):
+    """
+    Args:
+        threshold: Threshold value for converting probabilities to binary predictions (default: 0.5)
+    """
+    self.threshold = threshold
+
+  def __call__(self, output):
+    """
+    Preprocess the output before passing to Accuracy metric.
+
+    Args:
+        output: Tuple of (predictions, targets) - both are image tensors
+
+    Returns:
+        Preprocessed (predictions, targets) tuple with flattened tensors
+    """
+    y_pred, y = output
+
+    # Flatten image tensors for pixel-wise evaluation
+    y_pred = y_pred.flatten()
+    y = y.flatten()
+
+    # Threshold predictions for binary classification
+    y_pred = (y_pred > self.threshold).int()
     y = y.int()
 
     return (y_pred, y)
@@ -92,18 +128,21 @@ def build_metrics(args):
       is_thresholded = is_thresholded_dataset(args.dataset_name, args.dataset_path)
 
       if is_thresholded:
-        # For thresholded/binary datasets, use pixel-wise ROC-AUC
-        # Create base metric
-        base_metric = ROC_AUC(device=args.device)
+        # For thresholded/binary datasets, use pixel-wise ROC-AUC and Accuracy
+        # Create base metrics
+        roc_auc_metric = ROC_AUC(device=args.device)
+        accuracy_metric = Accuracy(device=args.device)
 
-        # Create preprocessor that flattens images for pixel-wise evaluation
-        preprocessor = ROCAUCPreprocessor()
+        # Create preprocessors that flatten images for pixel-wise evaluation
+        roc_auc_preprocessor = ROCAUCPreprocessor()
+        accuracy_preprocessor = AccuracyPreprocessor()
 
-        # Combine metric with preprocessor
+        # Combine metrics with preprocessors
         metrics = {
-          'roc_auc': MetricWithPreprocessor(base_metric, preprocessor)
+          'roc_auc': MetricWithPreprocessor(roc_auc_metric, roc_auc_preprocessor),
+          'accuracy': MetricWithPreprocessor(accuracy_metric, accuracy_preprocessor)
         }
         print(f'Using metrics for {args.model} with thresholded data: {list(metrics.keys())}')
-        print('Pixel-wise ROC-AUC metric will assess binary reconstruction performance')
+        print('Pixel-wise ROC-AUC and Accuracy metrics will assess binary reconstruction performance')
 
     return metrics
