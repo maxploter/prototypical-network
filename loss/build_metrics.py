@@ -1,6 +1,7 @@
 """
 Builder function for creating metrics based on model type.
 """
+import torch
 from ignite.metrics import ROC_AUC, Accuracy
 
 from utils import is_thresholded_dataset
@@ -19,12 +20,17 @@ class ROCAUCPreprocessor:
 
     Args:
         output: Tuple of (predictions, targets) - both are image tensors
+                predictions are logits (raw unbounded values)
 
     Returns:
         Preprocessed (predictions, targets) tuple with flattened tensors
         or None if ROC-AUC cannot be computed (only one class present)
     """
     y_pred, y = output
+
+    # Apply sigmoid to convert logits to probabilities
+    # ROC_AUC expects probability estimates, not raw logits (per ignite docs)
+    y_pred = torch.sigmoid(y_pred)
 
     # Flatten image tensors for pixel-wise evaluation
     y_pred = y_pred.flatten()
@@ -53,11 +59,15 @@ class AccuracyPreprocessor:
 
     Args:
         output: Tuple of (predictions, targets) - both are image tensors
+                predictions are logits (raw unbounded values)
 
     Returns:
         Preprocessed (predictions, targets) tuple with flattened tensors
     """
     y_pred, y = output
+
+    # Apply sigmoid to convert logits to probabilities
+    y_pred = torch.sigmoid(y_pred)
 
     # Flatten image tensors for pixel-wise evaluation
     y_pred = y_pred.flatten()
@@ -140,7 +150,7 @@ def build_metrics(args):
         # Combine metrics with preprocessors
         metrics = {
           'roc_auc': MetricWithPreprocessor(roc_auc_metric, roc_auc_preprocessor),
-          'accuracy': MetricWithPreprocessor(accuracy_metric, accuracy_preprocessor)
+          'acc': MetricWithPreprocessor(accuracy_metric, accuracy_preprocessor)
         }
         print(f'Using metrics for {args.model} with thresholded data: {list(metrics.keys())}')
         print('Pixel-wise ROC-AUC and Accuracy metrics will assess binary reconstruction performance')
