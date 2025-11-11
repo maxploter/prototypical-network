@@ -32,9 +32,7 @@ def build_dataset(args, split='train'):
     is_thresholded = is_thresholded_dataset(args.dataset_name, args.dataset_path)
 
     if is_thresholded:
-      transform = transforms.Compose([
-        transforms.ToTensor(),
-      ])
+      transform = None
     else:
       transform = transforms.Compose([
         transforms.ToTensor(),
