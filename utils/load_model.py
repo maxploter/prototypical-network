@@ -7,9 +7,6 @@ import argparse
 
 import torch
 
-from dataset import build_dataset
-from model import build_model
-
 
 def load_trained_model(checkpoint_path, device=None):
   """
@@ -30,6 +27,9 @@ def load_trained_model(checkpoint_path, device=None):
       >>> model.eval()
       >>> # Now you can use the model for inference
   """
+  # Lazy import to avoid circular dependency
+  from model import build_model
+
   if device is None:
     device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
@@ -81,6 +81,9 @@ def load_dataset_from_args(args, split='train'):
       >>> train_dataset = load_dataset_from_args(args, split='train')
       >>> val_dataset = load_dataset_from_args(args, split='val')
   """
+  # Lazy import to avoid circular dependency
+  from dataset import build_dataset
+
   dataset = build_dataset(args, split=split)
   print(f"✓ Loaded {split} dataset: {len(dataset)} samples")
   return dataset
