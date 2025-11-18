@@ -92,6 +92,7 @@ def main(args):
   n_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
   print(f'Number of trainable parameters: {n_parameters:,}')
 
+  # Resume from checkpoint if specified
   start_epoch = 0
   best_val_loss = float('inf')
   patience_counter = 0
@@ -107,15 +108,24 @@ def main(args):
       # Load optimizer state
       if 'optimizer' in checkpoint:
         optimizer.load_state_dict(checkpoint['optimizer'])
+        print("Optimizer state loaded")
+      else:
+        print("Warning: No optimizer state found in checkpoint")
 
       # Load training state
       if 'epoch' in checkpoint:
         start_epoch = checkpoint['epoch']
         print(f"Resuming from epoch {start_epoch}")
+      else:
+        print("Warning: No epoch information found in checkpoint, starting from epoch 0")
 
       if 'val_loss' in checkpoint:
         best_val_loss = checkpoint['val_loss']
         print(f"Best validation loss so far: {best_val_loss:.4f}")
+
+      if 'patience_counter' in checkpoint:
+        patience_counter = checkpoint['patience_counter']
+        print(f"Patience counter: {patience_counter}")
 
       # Load metrics if available
       if 'val_metrics' in checkpoint:
@@ -139,6 +149,16 @@ def main(args):
     print(f'Using ReduceLROnPlateau scheduler: lr will drop by factor of {args.lr_gamma} when validation loss plateaus')
   else:
     print('No learning rate scheduler used')
+
+  # Load scheduler state after creating it (must be done after scheduler is created)
+  if args.resume and os.path.isfile(args.resume):
+    checkpoint = torch.load(args.resume, map_location=args.device)
+    if 'scheduler' in checkpoint and lr_scheduler is not None:
+      lr_scheduler.load_state_dict(checkpoint['scheduler'])
+      print("Learning rate scheduler state loaded")
+      print(f"Current learning rate: {optimizer.param_groups[0]['lr']:.6f}")
+    elif lr_scheduler is not None:
+      print("Warning: No scheduler state found in checkpoint, scheduler will start from scratch")
 
   # Training loop for multiple epochs
   for epoch in range(start_epoch, args.epochs):
@@ -248,14 +268,18 @@ def main(args):
 
       # Prepare checkpoint data
       checkpoint = {
-          'epoch': epoch + 1,
-          'model': model.state_dict(),
-          'optimizer': optimizer.state_dict(),
+        'epoch': epoch + 1,
+        'model': model.state_dict(),
+        'optimizer': optimizer.state_dict(),
         'val_loss': float(val_loss),
         'val_loss_dict': to_python_type(val_loss_dict),
         'val_metrics': to_python_type(val_metrics_dict),
-          'args': vars(args),
+        'args': vars(args),
       }
+
+      # Save scheduler state if available
+      if lr_scheduler is not None:
+        checkpoint['scheduler'] = lr_scheduler.state_dict()
 
       torch.save(checkpoint, best_model_path)
 
@@ -272,13 +296,23 @@ def main(args):
       print(f'Best validation loss: {best_val_loss:.4f}')
       break
 
-  # Save final model
+  # Save final model (with full training state for easier resumption)
   model_path = os.path.join(args.output_dir, args.model + '.pth')
-  torch.save({
-      'model': model.state_dict(),
-      'args': vars(args),
-  }, model_path)
-  print(f'Model saved to {model_path}')
+  final_checkpoint = {
+    'epoch': args.epochs,
+    'model': model.state_dict(),
+    'optimizer': optimizer.state_dict(),
+    'val_loss': best_val_loss,
+    'patience_counter': patience_counter,
+    'args': vars(args),
+  }
+
+  # Save scheduler state if available
+  if lr_scheduler is not None:
+    final_checkpoint['scheduler'] = lr_scheduler.state_dict()
+
+  torch.save(final_checkpoint, model_path)
+  print(f'Final model saved to {model_path}')
 
 
 if __name__ == '__main__':
