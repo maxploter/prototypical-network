@@ -33,6 +33,8 @@ def parse_args():
     parser.add_argument('--autoencoder_path', type=str, default=None, help='Path to pretrained autoencoder weights')
     parser.add_argument('--output_dir', type=str, default='./checkpoints', help='Directory to save model checkpoints')
     parser.add_argument('--device', type=str, default='cuda' if torch.cuda.is_available() else 'cpu', help='Device to use')
+    parser.add_argument('--resume', type=str, default=None,
+                        help='Path to checkpoint to resume training from (e.g., ./checkpoints/autoencoder_best.pth)')
 
     # Global seed for reproducibility
     parser.add_argument('--seed', type=int, default=42,
@@ -90,6 +92,40 @@ def main(args):
   n_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
   print(f'Number of trainable parameters: {n_parameters:,}')
 
+  start_epoch = 0
+  best_val_loss = float('inf')
+  patience_counter = 0
+
+  if args.resume:
+    if os.path.isfile(args.resume):
+      print(f"Loading checkpoint from {args.resume}")
+      checkpoint = torch.load(args.resume, map_location=args.device)
+
+      # Load model state
+      model.load_state_dict(checkpoint['model'])
+
+      # Load optimizer state
+      if 'optimizer' in checkpoint:
+        optimizer.load_state_dict(checkpoint['optimizer'])
+
+      # Load training state
+      if 'epoch' in checkpoint:
+        start_epoch = checkpoint['epoch']
+        print(f"Resuming from epoch {start_epoch}")
+
+      if 'val_loss' in checkpoint:
+        best_val_loss = checkpoint['val_loss']
+        print(f"Best validation loss so far: {best_val_loss:.4f}")
+
+      # Load metrics if available
+      if 'val_metrics' in checkpoint:
+        print(f"Previous validation metrics: {checkpoint['val_metrics']}")
+
+      print("Checkpoint loaded successfully")
+    else:
+      print(f"Warning: Checkpoint file not found at {args.resume}")
+      print("Starting training from scratch")
+
   # Create learning rate scheduler
   lr_scheduler = None
   if args.lr_scheduler == 'step':
@@ -105,10 +141,7 @@ def main(args):
     print('No learning rate scheduler used')
 
   # Training loop for multiple epochs
-  best_val_loss = float('inf')
-  patience_counter = 0
-
-  for epoch in range(args.epochs):
+  for epoch in range(start_epoch, args.epochs):
     # Train
     train_loss, train_metrics_dict = train_one_epoch(
         model, criterion, train_dataloader, optimizer, args,
