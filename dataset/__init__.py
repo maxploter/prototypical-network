@@ -1,4 +1,4 @@
-from torch.utils.data import RandomSampler, BatchSampler
+from torch.utils.data import RandomSampler, BatchSampler, Subset
 from torchvision import datasets, transforms
 
 from dataset.autoencoder_dataset import AutoencoderDataset
@@ -74,10 +74,18 @@ def build_sampler(args, dataset):
       drop_last=False
     )
   else:
+    # Extract targets, handling Subset objects from dataset reduction
+    if isinstance(dataset, Subset):
+      base_dataset = dataset.dataset
+      all_targets = base_dataset.targets
+      targets = all_targets[dataset.indices]
+    else:
+      targets = dataset.targets
+
     samples_per_class = args.k_shot + args.q_query
 
     sampler = EpisodeSampler(
-      labels=dataset.targets,
+      labels=targets,
       classes_per_iteration=args.n_way,
       samples_per_class=samples_per_class,
       number_of_iterations=args.num_episodes
