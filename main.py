@@ -145,7 +145,8 @@ def main(args):
     lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs, eta_min=args.lr_min)
     print(f'Using CosineAnnealingLR scheduler: lr will decay to {args.lr_min}')
   elif args.lr_scheduler == 'plateau':
-    lr_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=args.lr_gamma, patience=2, verbose=True)
+    lr_scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=args.lr_gamma, patience=4,
+                                                              verbose=True)
     print(f'Using ReduceLROnPlateau scheduler: lr will drop by factor of {args.lr_gamma} when validation loss plateaus')
   else:
     print('No learning rate scheduler used')
