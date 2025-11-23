@@ -1,4 +1,6 @@
+import torch
 import torch.nn as nn
+import torch.nn.functional as F
 
 
 class PrototypicalCnnNetwork(nn.Module):
@@ -62,36 +64,17 @@ class PrototypicalCnnNetwork(nn.Module):
         return embeddings
 
 class PrototypicalAutoencoder(nn.Module):
-  """
-  Prototypical Network with support for different encoder dimensions.
-  Uses a projection layer to map encoder outputs to a common dimension,
-  then applies a shared prototypical network.
-  """
 
-  def __init__(self, encoder, encoder_dim=64, common_dim=16):
+  def __init__(self, encoder, encoder_dim=64):
     super(PrototypicalAutoencoder, self).__init__()
     self.encoder = encoder
-    self.encoder_dim = encoder_dim
-    self.common_dim = common_dim
 
-    # Use BatchNorm to ensure consistent input distribution to prototypical_network
-    if encoder_dim == common_dim:
-      self.projection = nn.BatchNorm1d(common_dim)
-    else:
-      self.projection = nn.Sequential(
-        nn.Linear(encoder_dim, common_dim),
-        nn.BatchNorm1d(common_dim)
-      )
-
-    # Shared prototypical network: same architecture for all encoders
-    # Works on the common dimension with gradual compression
-    # Architecture: 16 -> 12 -> 8 -> 4 (gradual compression)
     self.prototypical_network = nn.Sequential(
-      nn.Linear(common_dim, 12),
+      nn.Linear(encoder_dim, encoder_dim//2),
       nn.ReLU(),
-      nn.Linear(12, 8),
+      nn.Linear(encoder_dim//2, encoder_dim//4),
       nn.ReLU(),
-      nn.Linear(8, 4),
+      nn.Linear(encoder_dim//4, 2),
     )
 
   def forward(self, x):
@@ -100,6 +83,5 @@ class PrototypicalAutoencoder(nn.Module):
     x = x.view(batch_size, -1)
 
     x = self.encoder(x)
-    x = self.projection(x)
     embeddings = self.prototypical_network(x)
     return embeddings
