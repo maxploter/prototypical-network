@@ -64,8 +64,9 @@ class ChessDataset(Dataset):
         tuple: (board_tensor, board_tensor) where board_tensor is shape (64,)
                Returns same tensor twice for autoencoder training
     """
-    # Get all 64 square values
-    board_values = self.df.iloc[idx].values.astype(np.float32)
+    # Get only the 64 square values (sq0 to sq63), excluding move_id column
+    square_cols = [f'sq{i}' for i in range(64)]
+    board_values = self.df.iloc[idx][square_cols].values.astype(np.float32)
 
     # Convert to tensor
     board_tensor = torch.from_numpy(board_values)
@@ -76,8 +77,3 @@ class ChessDataset(Dataset):
 
     # For autoencoder training, return the same board as input and target
     return board_tensor, board_tensor
-
-
-from .chess_dataset import ChessDataset
-
-__all__ = ['ChessDataset']

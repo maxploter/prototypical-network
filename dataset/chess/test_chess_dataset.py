@@ -19,13 +19,17 @@ class TestChessDataset(unittest.TestCase):
     # Create a small test dataset with 100 positions
     np.random.seed(42)
     positions = []
-    for _ in range(100):
+    move_ids = []
+    for i in range(100):
       # Random board position (values 0-12)
       pos = np.random.randint(0, 13, size=64)
       positions.append(pos)
+      # Random move_id or -1 for starting positions
+      move_ids.append(-1 if i % 10 == 0 else np.random.randint(0, 4096))
 
-    # Save to CSV
+    # Save to CSV with correct structure: sq0, sq1, ..., sq63, move_id
     df = pd.DataFrame(positions, columns=[f'sq{i}' for i in range(64)])
+    df['move_id'] = move_ids
     self.csv_path = self.temp_path / 'chess_positions.csv'
     df.to_csv(self.csv_path, index=False)
 
@@ -40,6 +44,14 @@ class TestChessDataset(unittest.TestCase):
     np.savetxt(self.temp_path / 'train_indices.txt', train_indices, fmt='%d')
     np.savetxt(self.temp_path / 'val_indices.txt', val_indices, fmt='%d')
     np.savetxt(self.temp_path / 'test_indices.txt', test_indices, fmt='%d')
+
+    # Store the original dataframe for testing
+    self.original_df = df
+
+  def tearDown(self):
+    """Clean up temporary files."""
+    import shutil
+    shutil.rmtree(self.temp_dir)
 
   def test_dataset_creation(self):
     """Test that dataset can be created for each split."""
@@ -95,3 +107,44 @@ class TestChessDataset(unittest.TestCase):
 
     with self.assertRaises(FileNotFoundError):
       ChessDataset(self.csv_path, split='train')
+
+  def test_retrieve_board_vector(self):
+    """Test that we can retrieve the correct board vector for a specific index."""
+    # Load the train dataset
+    dataset = ChessDataset(self.csv_path, split='train')
+
+    # Load the train indices to map dataset index to original dataframe index
+    train_indices = np.loadtxt(self.temp_path / 'train_indices.txt', dtype=int)
+
+    # IMPORTANT: When pandas loads with skiprows, it loads rows in sorted order
+    # So we need to sort the train_indices to match the order in the dataset
+    sorted_train_indices = np.sort(train_indices)
+
+    # Test first item in the dataset
+    board, target = dataset[0]
+
+    # The first item in dataset corresponds to sorted_train_indices[0] in the original data
+    original_row_idx = sorted_train_indices[0]
+    expected_board = self.original_df.iloc[original_row_idx][[f'sq{i}' for i in range(64)]].values.astype(np.float32)
+
+    # Convert to tensor for comparison
+    expected_tensor = torch.from_numpy(expected_board)
+
+    # Verify the board matches
+    self.assertTrue(torch.equal(board, expected_tensor))
+    self.assertTrue(torch.equal(target, expected_tensor))
+
+    # Test a few more random indices
+    for dataset_idx in [5, 10, 20, 30]:
+      if dataset_idx < len(dataset):
+        board, target = dataset[dataset_idx]
+
+        # Map to original dataframe using sorted indices
+        original_row_idx = sorted_train_indices[dataset_idx]
+        expected_board = self.original_df.iloc[original_row_idx][[f'sq{i}' for i in range(64)]].values.astype(
+          np.float32)
+        expected_tensor = torch.from_numpy(expected_board)
+
+        # Verify the board matches
+        self.assertTrue(torch.equal(board, expected_tensor),
+                        f"Mismatch at dataset index {dataset_idx} (original row {original_row_idx})")
