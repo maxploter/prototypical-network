@@ -143,7 +143,8 @@ def split_dataset(num_positions, output_dir, train_ratio=0.64, val_ratio=0.16, t
   print(f"Split created: train={len(train_indices)}, val={len(val_indices)}, test={len(test_indices)}")
 
 
-def main():
+def create_arg_parser():
+  """Create and return argument parser for chess dataset preparation."""
   parser = argparse.ArgumentParser(description='Prepare chess dataset from PGN file')
   parser.add_argument('--pgn_path', type=str, required=True,
                       help='Path to PGN file')
@@ -159,18 +160,34 @@ def main():
                       help='Test set ratio')
   parser.add_argument('--seed', type=int, default=42,
                       help='Random seed for reproducibility')
+  return parser
 
-  args = parser.parse_args()
 
+def process(pgn_path, output_dir, max_games=None, train_ratio=0.64, val_ratio=0.16, test_ratio=0.20, seed=42):
+  """
+  Process chess games from PGN file and create dataset.
+
+  Args:
+      pgn_path: Path to PGN file
+      output_dir: Output directory for dataset files
+      max_games: Maximum number of games to process (None for all)
+      train_ratio: Ratio for training set
+      val_ratio: Ratio for validation set
+      test_ratio: Ratio for test set
+      seed: Random seed for reproducibility
+
+  Returns:
+      Dictionary with paths to created files and statistics
+  """
   # Set random seed
-  np.random.seed(args.seed)
+  np.random.seed(seed)
 
   # Create output directory
-  output_dir = Path(args.output_dir)
+  output_dir = Path(output_dir)
   output_dir.mkdir(parents=True, exist_ok=True)
 
-  print(f"Extracting moves from {args.pgn_path}...")
-  uci_games = extract_moves_from_pgn(args.pgn_path, max_games=args.max_games)
+  print(f"Extracting moves from {pgn_path}...")
+  uci_games = extract_moves_from_pgn(pgn_path, max_games=max_games)
   print(f"Extracted {len(uci_games)} games")
 
   print("Converting games to board positions...")
@@ -183,13 +200,37 @@ def main():
   # Create train/val/test splits
   print("Creating train/val/test splits...")
   split_dataset(num_positions, output_dir,
-                train_ratio=args.train_ratio,
-                val_ratio=args.val_ratio,
-                test_ratio=args.test_ratio)
+                train_ratio=train_ratio,
+                val_ratio=val_ratio,
+                test_ratio=test_ratio)
 
   print(f"\nDataset preparation complete!")
   print(f"Dataset saved to: {csv_path}")
   print(f"Split files saved to: {output_dir}")
+
+  return {
+    'csv_path': csv_path,
+    'train_indices_path': output_dir / 'train_indices.txt',
+    'val_indices_path': output_dir / 'val_indices.txt',
+    'test_indices_path': output_dir / 'test_indices.txt',
+    'num_games': len(uci_games),
+    'num_positions': num_positions,
+  }
+
+
+def main():
+  parser = create_arg_parser()
+  args = parser.parse_args()
+
+  process(
+    pgn_path=args.pgn_path,
+    output_dir=args.output_dir,
+    max_games=args.max_games,
+    train_ratio=args.train_ratio,
+    val_ratio=args.val_ratio,
+    test_ratio=args.test_ratio,
+    seed=args.seed
+  )
 
 
 if __name__ == '__main__':
