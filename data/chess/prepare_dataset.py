@@ -78,21 +78,32 @@ def uci_games_to_arrays(uci_games):
   return positions_list, move_ids_list
 
 
-def save_positions_to_csv(positions_list, output_path):
+def save_positions_to_csv(positions_list, move_ids_list, output_path):
   """
-  Save all board positions to a CSV file.
-  Each row is one board position (64 values).
+  Save all board positions and moves to a CSV file.
+  Each row is one board position (64 values) plus the move_id.
 
   Args:
       positions_list: List of games, each game is a list of 64-element board vectors
+      move_ids_list: List of games, each game is a list of move indices
       output_path: Path to save the CSV file
   """
   all_positions = []
-  for game in positions_list:
-    all_positions.extend(game)
+  all_move_ids = []
 
-  # Create DataFrame with columns sq0, sq1, ..., sq63
+  for game_positions, game_moves in zip(positions_list, move_ids_list):
+    # First position has no move (it's the starting position)
+    # Subsequent positions have corresponding moves
+    all_positions.append(game_positions[0])
+    all_move_ids.append(-1)  # -1 indicates no move (starting position)
+
+    for pos, move_id in zip(game_positions[1:], game_moves):
+      all_positions.append(pos)
+      all_move_ids.append(move_id)
+
+  # Create DataFrame with columns sq0, sq1, ..., sq63, move_id
   df = pd.DataFrame(all_positions, columns=[f'sq{i}' for i in range(64)])
+  df['move_id'] = all_move_ids
   df.to_csv(output_path, index=False)
   print(f"Saved {len(all_positions)} positions to {output_path}")
   return len(all_positions)
@@ -167,7 +178,7 @@ def main():
 
   # Save positions to CSV
   csv_path = output_dir / 'chess_positions.csv'
-  num_positions = save_positions_to_csv(positions_list, csv_path)
+  num_positions = save_positions_to_csv(positions_list, move_ids_list, csv_path)
 
   # Create train/val/test splits
   print("Creating train/val/test splits...")
