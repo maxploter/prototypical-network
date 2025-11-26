@@ -18,7 +18,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description="Training Prototype Network")
     parser.add_argument('--model', type=str, default='prototypical', choices=['prototypical_cnn', 'autoencoder', 'prototypical_autoencoder'],
                         help='Type of model to use: prototypical or autoencoder')
-    parser.add_argument('--dataset_name', type=str, default='mnist', choices=['mnist', 'tmnist'],
+    parser.add_argument('--dataset_name', type=str, default='mnist', choices=['mnist', 'tmnist', 'chess'],
                         help='Dataset to use: mnist or tmnist')
     parser.add_argument('--dataset_path', type=str, default=None,
                         help='Path to dataset CSV file (required for tmnist). Default: ./data/tmnist/tmnist-glyphs-1812-characters/Glyphs_TMNIST_updated.csv')
