@@ -14,6 +14,11 @@ def is_thresholded_dataset(dataset_name, dataset_path):
     dataset_path_str = str(dataset_path).lower()
     return 'thresholded' in dataset_path_str
 
+  # Chess dataset uses discrete piece values (0-12), treated as multi-class classification
+  # We'll use CrossEntropyLoss and multi-class metrics
+  if dataset_name == 'chess':
+    return True
+
   # Default to False for unknown datasets
   return False
 

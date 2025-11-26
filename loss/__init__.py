@@ -10,6 +10,9 @@ def build_criterion(args):
     if args.dataset_name == 'tmnist':
       # Check if dataset is thresholded (binary) or original (grayscale)
       loss_type = 'bce' if is_thresholded_dataset(args.dataset_name, args.dataset_path) else 'mse'
+    elif args.dataset_name == 'chess':
+      # Chess uses multi-class classification (13 classes: 0-12)
+      loss_type = 'ce'
     else:
       # Default to MSE for other datasets (like MNIST)
       loss_type = 'mse'
