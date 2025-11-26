@@ -72,18 +72,18 @@ class TestChessDataset(unittest.TestCase):
   def test_getitem(self):
     """Test that __getitem__ returns correct format."""
     dataset = ChessDataset(self.csv_path, split='train')
-    board, target = dataset[0]
+    board, move_id = dataset[0]
 
     # Check types
     self.assertIsInstance(board, torch.Tensor)
-    self.assertIsInstance(target, torch.Tensor)
+    self.assertIsInstance(move_id, int)
 
     # Check shape
     self.assertEqual(board.shape, (64,))
-    self.assertEqual(target.shape, (64,))
 
-    # For autoencoder, input and target should be the same
-    self.assertTrue(torch.equal(board, target))
+    # Check move_id is valid
+    self.assertTrue(move_id >= -1)  # -1 for starting positions, or 0-4095 for moves
+    self.assertTrue(move_id < 4096)
 
   def test_board_values(self):
     """Test that board values are in valid range."""
@@ -121,30 +121,72 @@ class TestChessDataset(unittest.TestCase):
     sorted_train_indices = np.sort(train_indices)
 
     # Test first item in the dataset
-    board, target = dataset[0]
+    board, move_id = dataset[0]
 
     # The first item in dataset corresponds to sorted_train_indices[0] in the original data
     original_row_idx = sorted_train_indices[0]
     expected_board = self.original_df.iloc[original_row_idx][[f'sq{i}' for i in range(64)]].values.astype(np.float32)
+    expected_move_id = int(self.original_df.iloc[original_row_idx]['move_id'])
 
     # Convert to tensor for comparison
     expected_tensor = torch.from_numpy(expected_board)
 
-    # Verify the board matches
+    # Verify the board and move_id match
     self.assertTrue(torch.equal(board, expected_tensor))
-    self.assertTrue(torch.equal(target, expected_tensor))
+    self.assertEqual(move_id, expected_move_id)
 
     # Test a few more random indices
     for dataset_idx in [5, 10, 20, 30]:
       if dataset_idx < len(dataset):
-        board, target = dataset[dataset_idx]
+        board, move_id = dataset[dataset_idx]
 
         # Map to original dataframe using sorted indices
         original_row_idx = sorted_train_indices[dataset_idx]
         expected_board = self.original_df.iloc[original_row_idx][[f'sq{i}' for i in range(64)]].values.astype(
           np.float32)
+        expected_move_id = int(self.original_df.iloc[original_row_idx]['move_id'])
         expected_tensor = torch.from_numpy(expected_board)
 
-        # Verify the board matches
+        # Verify the board and move_id match
         self.assertTrue(torch.equal(board, expected_tensor),
                         f"Mismatch at dataset index {dataset_idx} (original row {original_row_idx})")
+        self.assertEqual(move_id, expected_move_id)
+
+  def test_with_autoencoder_dataset(self):
+    """Test that ChessDataset works correctly with AutoencoderDataset wrapper."""
+    from dataset.autoencoder_dataset import AutoencoderDataset
+
+    # Load the chess dataset
+    chess_dataset = ChessDataset(self.csv_path, split='train')
+
+    # Wrap it with AutoencoderDataset
+    autoencoder_dataset = AutoencoderDataset(chess_dataset)
+
+    # Test that it has the same length
+    self.assertEqual(len(autoencoder_dataset), len(chess_dataset))
+
+    # Test retrieving an item
+    board_input, board_target = autoencoder_dataset[0]
+
+    # Both should be tensors
+    self.assertIsInstance(board_input, torch.Tensor)
+    self.assertIsInstance(board_target, torch.Tensor)
+
+    # Both should be the same (reconstruction task)
+    self.assertTrue(torch.equal(board_input, board_target))
+
+    # Should be shape (64,) - already flat
+    self.assertEqual(board_input.shape, (64,))
+
+    # Verify it matches the original chess dataset board (without move_id)
+    original_board, _ = chess_dataset[0]
+    self.assertTrue(torch.equal(board_input, original_board))
+
+    # Test a few more items
+    for idx in [5, 10, 20, 30]:
+      if idx < len(autoencoder_dataset):
+        board_input, board_target = autoencoder_dataset[idx]
+        original_board, _ = chess_dataset[idx]
+
+        self.assertTrue(torch.equal(board_input, board_target))
+        self.assertTrue(torch.equal(board_input, original_board))

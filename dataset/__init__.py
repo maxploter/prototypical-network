@@ -2,6 +2,7 @@ from torch.utils.data import RandomSampler, BatchSampler, Subset
 from torchvision import datasets, transforms
 
 from dataset.autoencoder_dataset import AutoencoderDataset
+from dataset.chess import ChessDataset
 from dataset.dataset_reduction import apply_dataset_reduction
 from dataset.episode_sampler import EpisodeSampler
 from dataset.tmnist import TMNISTDataset
@@ -44,8 +45,16 @@ def build_dataset(args, split='train'):
       split=split,
       transform=transform
     )
+  elif args.dataset_name == 'chess':
+    # Chess dataset: 64 integer values representing board positions
+    # No normalization needed - values are already in range 0-12
+    dataset = ChessDataset(
+      dataset_path=args.dataset_path,
+      split=split,
+      transform=None
+    )
   else:
-    raise ValueError(f"Unknown dataset: {args.dataset_name}. Supported: 'mnist', 'tmnist'")
+    raise ValueError(f"Unknown dataset: {args.dataset_name}. Supported: 'mnist', 'tmnist', 'chess'")
 
   # Apply dataset reduction if specified (only for training split)
   if split == 'train' and hasattr(args, 'dataset_reduction') and args.dataset_reduction < 1.0:

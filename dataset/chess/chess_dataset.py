@@ -61,8 +61,8 @@ class ChessDataset(Dataset):
   def __getitem__(self, idx):
     """
     Returns:
-        tuple: (board_tensor, board_tensor) where board_tensor is shape (64,)
-               Returns same tensor twice for autoencoder training
+        tuple: (board_tensor, move_id) where board_tensor is shape (64,)
+               and move_id is the associated move index
     """
     # Get only the 64 square values (sq0 to sq63), excluding move_id column
     square_cols = [f'sq{i}' for i in range(64)]
@@ -75,5 +75,8 @@ class ChessDataset(Dataset):
     if self.transform is not None:
       board_tensor = self.transform(board_tensor)
 
-    # For autoencoder training, return the same board as input and target
-    return board_tensor, board_tensor
+    # Get move_id as the label
+    move_id = int(self.df.iloc[idx]['move_id'])
+
+    # Return board and move_id (like standard datasets return image, label)
+    return board_tensor, move_id
