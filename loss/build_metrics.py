@@ -142,7 +142,7 @@ class ChessAccuracyPreprocessor:
   """
   Preprocessor for Accuracy metric on chess dataset with multi-class classification.
   Handles chess board positions with 13 classes (0-12 representing different pieces).
-  Computes position-wise accuracy by taking argmax over class dimension.
+  Reshapes logits and targets for position-wise evaluation.
   """
 
   def __call__(self, output):
@@ -158,23 +158,21 @@ class ChessAccuracyPreprocessor:
                 targets are class indices of shape (B, D) with values 0-12
 
     Returns:
-        Preprocessed (predictions, targets) tuple with flattened tensors:
-          - predictions: (B*D,) predicted class indices
+        Preprocessed (predictions, targets) tuple:
+          - predictions: (B*D, C) logits for Ignite's multi-class accuracy
           - targets: (B*D,) ground truth class indices
     """
     y_pred, y = output
 
-    # Take argmax over class dimension to get predicted classes
-    # Shape: (B, C, D) -> (B, D)
-    y_pred = torch.argmax(y_pred, dim=1)
-
-    # Flatten predictions: (B, D) -> (B*D,)
-    y_pred = y_pred.flatten().int()
+    # Reshape predictions: (B, C, D) -> (B*D, C)
+    # This treats each of the 64 board positions as an independent sample
+    B, C, D = y_pred.shape
+    y_pred = y_pred.permute(0, 2, 1).reshape(-1, C)  # (B*D, C)
 
     # Flatten targets: (B, D) -> (B*D,)
     if y.dim() == 3 and y.shape[1] == 1:
       y = y.squeeze(1)  # Handle (B, 1, D) -> (B, D)
-    y = y.flatten().int()
+    y = y.flatten().long()  # (B*D,) - use .long() for class indices
 
     return (y_pred, y)
 
@@ -238,7 +236,11 @@ def build_metrics(args):
         # Chess dataset: multi-class classification with 13 classes
         # Create base metrics
         roc_auc_metric = ROC_AUC(device=args.device)
-        accuracy_metric = Accuracy(device=args.device)
+        # For multi-class classification, Ignite's Accuracy expects:
+        # - predictions: (N, C) tensor with raw logits or probabilities
+        # - targets: (N,) tensor with class indices
+        # Set is_multilabel=False to indicate this is multi-class (not binary or multilabel)
+        accuracy_metric = Accuracy(is_multilabel=False, device=args.device)
 
         # Create chess-specific preprocessors for multi-class classification
         roc_auc_preprocessor = ChessROCAUCPreprocessor(num_classes=13)

@@ -21,7 +21,7 @@ class TestROCAUCPreprocessor(unittest.TestCase):
     y_pred = torch.tensor([
       [[0.1, 0.85], [0.3, 0.92]],
       [[0.05, 0.78], [0.88, 0.15]]
-    ])  # Float predictions
+    ])  # Float predictions (logits)
 
     y = torch.tensor([
       [[0.0, 1.0], [0.0, 1.0]],
@@ -41,8 +41,8 @@ class TestROCAUCPreprocessor(unittest.TestCase):
     expected_target = torch.tensor([0, 1, 0, 1, 0, 1, 1, 0], dtype=torch.int32)
     self.assertTrue(torch.equal(preprocessed_target, expected_target))
 
-    # Verify predictions are unchanged and flattened
-    expected_pred = torch.tensor([0.1, 0.85, 0.3, 0.92, 0.05, 0.78, 0.88, 0.15])
+    # Verify predictions are sigmoid-transformed and flattened
+    expected_pred = torch.sigmoid(torch.tensor([0.1, 0.85, 0.3, 0.92, 0.05, 0.78, 0.88, 0.15]))
     self.assertTrue(torch.allclose(preprocessed_pred, expected_pred))
 
   # NEW TESTS FOR CHESS PREPROCESSORS
@@ -151,17 +151,17 @@ class TestROCAUCPreprocessor(unittest.TestCase):
     # Preprocess
     y_pred, y = preprocessor((logits, targets))
 
-    # Check shapes
+    # Check shapes - predictions should be (N, C) for multi-class, targets (N,)
     expected_samples = batch_size * num_positions  # 4 * 64 = 256
-    self.assertEqual(y_pred.shape, (expected_samples,))
+    self.assertEqual(y_pred.shape, (expected_samples, num_classes))
     self.assertEqual(y.shape, (expected_samples,))
 
-    # Check data types
-    self.assertEqual(y_pred.dtype, torch.int32)
-    self.assertEqual(y.dtype, torch.int32)
+    # Check data types - predictions are float logits, targets are long class indices
+    self.assertEqual(y_pred.dtype, torch.float32)
+    self.assertEqual(y.dtype, torch.int64)
 
   def test_chess_accuracy_argmax_application(self):
-    """Test that ChessAccuracyPreprocessor correctly applies argmax over class dimension."""
+    """Test that ChessAccuracyPreprocessor returns logits in correct format for Ignite Accuracy."""
     preprocessor = ChessAccuracyPreprocessor()
 
     # Create logits where each position has a different max class
@@ -178,13 +178,18 @@ class TestROCAUCPreprocessor(unittest.TestCase):
 
     y_pred, y = preprocessor((logits, targets))
 
-    # Check that argmax worked correctly
-    self.assertEqual(y_pred[0].item(), 0)  # First position should predict class 0
-    self.assertEqual(y_pred[1].item(), 1)  # Second position should predict class 1
-    self.assertEqual(y_pred[2].item(), 2)  # Third position should predict class 2
+    # Check that predictions are logits (not argmax), shape (N, C)
+    self.assertEqual(y_pred.shape, (128, 13))  # 2 batches * 64 positions = 128, 13 classes
+
+    # Verify that the argmax of returned logits gives expected classes
+    # This verifies Ignite's Accuracy will compute the right thing
+    pred_classes = torch.argmax(y_pred, dim=1)
+    self.assertEqual(pred_classes[0].item(), 0)  # First position should have class 0 as max
+    self.assertEqual(pred_classes[1].item(), 1)  # Second position should have class 1 as max
+    self.assertEqual(pred_classes[2].item(), 2)  # Third position should have class 2 as max
 
   def test_chess_accuracy_prediction_range(self):
-    """Test that ChessAccuracyPreprocessor predicted classes are in valid range [0, 12]."""
+    """Test that ChessAccuracyPreprocessor logits produce valid class predictions in range [0, 12]."""
     preprocessor = ChessAccuracyPreprocessor()
 
     logits = torch.randn(3, 13, 64)
@@ -192,9 +197,10 @@ class TestROCAUCPreprocessor(unittest.TestCase):
 
     y_pred, y = preprocessor((logits, targets))
 
-    # All predictions should be between 0 and 12
-    self.assertTrue(torch.all(y_pred >= 0))
-    self.assertTrue(torch.all(y_pred < 13))
+    # Predictions are logits (N, C), verify argmax produces valid classes
+    pred_classes = torch.argmax(y_pred, dim=1)
+    self.assertTrue(torch.all(pred_classes >= 0))
+    self.assertTrue(torch.all(pred_classes < 13))
 
   def test_chess_accuracy_perfect_predictions(self):
     """Test ChessAccuracyPreprocessor with perfect predictions (logits match targets)."""
@@ -212,11 +218,11 @@ class TestROCAUCPreprocessor(unittest.TestCase):
 
     y_pred, y = preprocessor((logits, targets))
 
-    # All predictions should match targets
-    self.assertTrue(torch.all(y_pred == y))
+    # Predictions are logits, verify argmax matches targets
+    pred_classes = torch.argmax(y_pred, dim=1)
+    self.assertTrue(torch.all(pred_classes == y))
 
   def test_chess_accuracy_output_flattening(self):
-    """Test that ChessAccuracyPreprocessor outputs are correctly flattened."""
     preprocessor = ChessAccuracyPreprocessor()
 
     logits = torch.randn(2, 13, 64)
@@ -227,7 +233,8 @@ class TestROCAUCPreprocessor(unittest.TestCase):
 
     y_pred, y = preprocessor((logits, targets))
 
-    # Check shape is flattened: 2 * 64 = 128
+    # Check shapes: predictions (N, C), targets (N,)
+    self.assertEqual(y_pred.shape, (128, 13))  # 2 * 64 = 128 samples, 13 classes
     self.assertEqual(y.shape, (128,))
 
     # Check specific target values are preserved
