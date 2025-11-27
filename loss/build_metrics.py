@@ -2,8 +2,7 @@
 Builder function for creating metrics based on model type.
 """
 import torch
-import torch.nn.functional as F
-from ignite.metrics import ROC_AUC, Accuracy
+from ignite.metrics import ROC_AUC, Accuracy, Precision, Recall, Fbeta, ConfusionMatrix
 
 from utils import is_thresholded_dataset
 
@@ -81,63 +80,6 @@ class AccuracyPreprocessor:
     return (y_pred, y)
 
 
-class ChessROCAUCPreprocessor:
-  """
-  Preprocessor for ROC AUC metric on chess dataset with multi-class classification.
-  Handles chess board positions with 13 classes (0-12 representing different pieces).
-  Converts logits to probabilities and reshapes for position-wise evaluation.
-  """
-
-  def __init__(self, num_classes=13):
-    """
-    Args:
-        num_classes: Number of piece classes (default: 13 for chess - empty + 12 piece types)
-    """
-    self.num_classes = num_classes
-
-  def __call__(self, output):
-    """
-    Preprocess the output before passing to ROC AUC metric.
-
-    Args:
-        output: Tuple of (predictions, targets)
-                predictions are logits of shape (B, C, D) where:
-                  B = batch size
-                  C = 13 classes (piece types)
-                  D = 64 positions (chess board squares)
-                targets are class indices of shape (B, D) with values 0-12
-
-    Returns:
-        Preprocessed (predictions, targets) tuple:
-          - predictions: (B*D, C) probability matrix
-          - targets: (B*D,) class indices
-        or None if ROC-AUC cannot be computed (only one class present)
-    """
-    y_pred, y = output
-
-    # Apply softmax to convert logits to probabilities for multi-class
-    # Shape: (B, C, D) -> (B, C, D)
-    y_pred = F.softmax(y_pred, dim=1)
-
-    # Reshape predictions: (B, C, D) -> (B*D, C)
-    # This treats each of the 64 board positions as an independent sample
-    B, C, D = y_pred.shape
-    y_pred = y_pred.permute(0, 2, 1).reshape(-1, C)  # (B*D, C)
-
-    # Flatten targets: (B, D) -> (B*D,)
-    if y.dim() == 3 and y.shape[1] == 1:
-      y = y.squeeze(1)  # Handle (B, 1, D) -> (B, D)
-    y = y.flatten().long()  # (B*D,)
-
-    # Check if we have multiple classes present in this batch
-    # ROC-AUC requires at least 2 classes
-    unique_classes = torch.unique(y)
-    if len(unique_classes) < 2:
-      return None  # Cannot compute ROC-AUC with only one class
-
-    return (y_pred, y)
-
-
 class ChessAccuracyPreprocessor:
   """
   Preprocessor for Accuracy metric on chess dataset with multi-class classification.
@@ -173,6 +115,7 @@ class ChessAccuracyPreprocessor:
     if y.dim() == 3 and y.shape[1] == 1:
       y = y.squeeze(1)  # Handle (B, 1, D) -> (B, D)
     y = y.flatten().long()  # (B*D,) - use .long() for class indices
+
 
     return (y_pred, y)
 
@@ -234,25 +177,43 @@ def build_metrics(args):
       # Check if this is the chess dataset (multi-class classification)
       if args.dataset_name == 'chess':
         # Chess dataset: multi-class classification with 13 classes
-        # Create base metrics
-        roc_auc_metric = ROC_AUC(device=args.device)
-        # For multi-class classification, Ignite's Accuracy expects:
+        # Standard metrics for multi-class classification:
+        # - Accuracy: Overall correctness
+        # - F1-Score: Harmonic mean of precision and recall (macro-averaged)
+        # - Confusion Matrix: Per-class performance analysis
+
+        # All Ignite metrics expect:
         # - predictions: (N, C) tensor with raw logits or probabilities
         # - targets: (N,) tensor with class indices
-        # Set is_multilabel=False to indicate this is multi-class (not binary or multilabel)
+        # Set is_multilabel=False for multi-class classification
+
         accuracy_metric = Accuracy(is_multilabel=False, device=args.device)
 
-        # Create chess-specific preprocessors for multi-class classification
-        roc_auc_preprocessor = ChessROCAUCPreprocessor(num_classes=13)
+        # For Fbeta to work, Precision and Recall must have average=False
+        # Fbeta then does the averaging itself with average=True
+        precision_metric = Precision(average=False, is_multilabel=False, device=args.device)
+        recall_metric = Recall(average=False, is_multilabel=False, device=args.device)
+
+        # F1-Score (Fbeta with beta=1) with macro averaging
+        # This will compute F1 per class and then average them
+        f1_metric = Fbeta(beta=1.0, average=True, precision=precision_metric, recall=recall_metric, device=args.device)
+
+        # Confusion Matrix: 13x13 matrix showing predicted vs actual classes
+        # Useful for understanding which pieces are confused with each other
+        confusion_matrix_metric = ConfusionMatrix(num_classes=13, device=args.device)
+
+        # Create chess-specific preprocessor for multi-class classification
         accuracy_preprocessor = ChessAccuracyPreprocessor()
 
-        # Combine metrics with preprocessors
+        # Combine metrics with preprocessor
         metrics = {
-          'roc_auc': MetricWithPreprocessor(roc_auc_metric, roc_auc_preprocessor),
-          'acc': MetricWithPreprocessor(accuracy_metric, accuracy_preprocessor)
+          'acc': MetricWithPreprocessor(accuracy_metric, accuracy_preprocessor),
+          'f1': MetricWithPreprocessor(f1_metric, accuracy_preprocessor),
+          'confusion_matrix': MetricWithPreprocessor(confusion_matrix_metric, accuracy_preprocessor)
         }
         print(f'Using metrics for {args.model} with chess dataset (13 classes): {list(metrics.keys())}')
-        print('Position-wise ROC-AUC and Accuracy metrics will assess chess piece classification performance')
+        print(
+          'Position-wise Accuracy, F1-Score (macro-averaged), and Confusion Matrix will assess chess piece classification performance')
 
       # Check if we're working with thresholded (binary) data
       elif is_thresholded_dataset(args.dataset_name, args.dataset_path):
