@@ -102,8 +102,15 @@ def train_one_epoch(model, criterion, dataloader, optimizer, args, epoch=None, m
     # Print metrics
     for name, value in metrics_dict.items():
         if isinstance(value, torch.Tensor):
+          # Only convert to scalar if tensor has 1 element
+          if value.numel() == 1:
             value = value.item()
-        print(f'{name}: {value:.4f}')
+            print(f'{name}: {value:.4f}')
+          else:
+            # For multi-element tensors (e.g., confusion matrix), skip printing or print shape
+            print(f'{name}: shape {value.shape}')
+        else:
+          print(f'{name}: {value:.4f}')
 
     return avg_loss, metrics_dict
 
@@ -206,7 +213,14 @@ def evaluate(model, criterion, dataloader, args, epoch=None, metrics=None):
     # Print metrics
     for name, value in metrics_dict.items():
         if isinstance(value, torch.Tensor):
+          # Only convert to scalar if tensor has 1 element
+          if value.numel() == 1:
             value = value.item()
-        print(f'{name}: {value:.4f}')
+            print(f'{name}: {value:.4f}')
+          else:
+            # For multi-element tensors (e.g., confusion matrix), skip printing or print shape
+            print(f'{name}: shape {value.shape}')
+        else:
+          print(f'{name}: {value:.4f}')
 
     return avg_loss, avg_loss_dict, metrics_dict

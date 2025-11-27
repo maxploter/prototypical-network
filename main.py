@@ -188,8 +188,15 @@ def main(args):
     # Add train metrics
     for k, v in train_metrics_dict.items():
         if isinstance(v, torch.Tensor):
+          # Only convert to scalar if tensor has 1 element
+          if v.numel() == 1:
             v = v.item()
-        log_stats[f'train_{k}'] = v
+            log_stats[f'train_{k}'] = v
+          else:
+            # Convert multi-element tensors (e.g., confusion matrix) to nested lists for JSON serialization
+            log_stats[f'train_{k}'] = v.cpu().tolist()
+        else:
+          log_stats[f'train_{k}'] = v
 
     # Add validation loss components
     for k, v in val_loss_dict.items():
@@ -198,8 +205,15 @@ def main(args):
     # Add validation metrics
     for k, v in val_metrics_dict.items():
         if isinstance(v, torch.Tensor):
+          # Only convert to scalar if tensor has 1 element
+          if v.numel() == 1:
             v = v.item()
-        log_stats[f'val_{k}'] = v
+            log_stats[f'val_{k}'] = v
+          else:
+            # Convert multi-element tensors (e.g., confusion matrix) to nested lists for JSON serialization
+            log_stats[f'val_{k}'] = v.cpu().tolist()
+        else:
+          log_stats[f'val_{k}'] = v
 
     # Add learning rate
     current_lr = optimizer.param_groups[0]['lr']
@@ -218,8 +232,15 @@ def main(args):
     if train_metrics_dict:
         for k, v in train_metrics_dict.items():
             if isinstance(v, torch.Tensor):
+              # Only convert to scalar if tensor has 1 element
+              if v.numel() == 1:
                 v = v.item()
-            print(f'  Train {k}: {v:.4f}')
+                print(f'  Train {k}: {v:.4f}')
+              else:
+                # For multi-element tensors, print shape
+                print(f'  Train {k}: shape {v.shape}')
+            else:
+              print(f'  Train {k}: {v:.4f}')
 
     # Print all validation loss components
     if val_loss_dict:
@@ -230,8 +251,15 @@ def main(args):
     if val_metrics_dict:
         for k, v in val_metrics_dict.items():
             if isinstance(v, torch.Tensor):
+              # Only convert to scalar if tensor has 1 element
+              if v.numel() == 1:
                 v = v.item()
-            print(f'  Val {k}: {v:.4f}')
+                print(f'  Val {k}: {v:.4f}')
+              else:
+                # For multi-element tensors, print shape
+                print(f'  Val {k}: shape {v.shape}')
+            else:
+              print(f'  Val {k}: {v:.4f}')
 
     # Update learning rate scheduler
     if lr_scheduler is not None:
@@ -256,7 +284,12 @@ def main(args):
       def to_python_type(value):
         """Convert numpy/torch scalars to native Python types."""
         if isinstance(value, torch.Tensor):
-          return value.item()
+          # Only convert to scalar if tensor has 1 element
+          if value.numel() == 1:
+            return value.item()
+          else:
+            # Convert multi-element tensors to nested lists
+            return value.cpu().tolist()
         elif hasattr(value, 'item'):  # numpy scalar
           return value.item()
         elif isinstance(value, dict):
