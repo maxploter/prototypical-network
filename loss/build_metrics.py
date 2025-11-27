@@ -194,9 +194,7 @@ def build_metrics(args):
         precision_metric = Precision(average=False, is_multilabel=False, device=args.device)
         recall_metric = Recall(average=False, is_multilabel=False, device=args.device)
 
-        # F1-Score (Fbeta with beta=1) with macro averaging
-        # This will compute F1 per class and then average them
-        f1_metric = Fbeta(beta=1.0, average=True, precision=precision_metric, recall=recall_metric, device=args.device)
+        f1_metric = Fbeta(beta=1.0, average=True, precision=precision_metric, recall=recall_metric)
 
         # Confusion Matrix: 13x13 matrix showing predicted vs actual classes
         # Useful for understanding which pieces are confused with each other
