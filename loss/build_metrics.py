@@ -2,6 +2,7 @@
 Builder function for creating metrics based on model type.
 """
 import torch
+import torch.nn.functional as F
 from ignite.metrics import ROC_AUC, Accuracy
 
 from utils import is_thresholded_dataset
@@ -80,6 +81,104 @@ class AccuracyPreprocessor:
     return (y_pred, y)
 
 
+class ChessROCAUCPreprocessor:
+  """
+  Preprocessor for ROC AUC metric on chess dataset with multi-class classification.
+  Handles chess board positions with 13 classes (0-12 representing different pieces).
+  Converts logits to probabilities and reshapes for position-wise evaluation.
+  """
+
+  def __init__(self, num_classes=13):
+    """
+    Args:
+        num_classes: Number of piece classes (default: 13 for chess - empty + 12 piece types)
+    """
+    self.num_classes = num_classes
+
+  def __call__(self, output):
+    """
+    Preprocess the output before passing to ROC AUC metric.
+
+    Args:
+        output: Tuple of (predictions, targets)
+                predictions are logits of shape (B, C, D) where:
+                  B = batch size
+                  C = 13 classes (piece types)
+                  D = 64 positions (chess board squares)
+                targets are class indices of shape (B, D) with values 0-12
+
+    Returns:
+        Preprocessed (predictions, targets) tuple:
+          - predictions: (B*D, C) probability matrix
+          - targets: (B*D,) class indices
+        or None if ROC-AUC cannot be computed (only one class present)
+    """
+    y_pred, y = output
+
+    # Apply softmax to convert logits to probabilities for multi-class
+    # Shape: (B, C, D) -> (B, C, D)
+    y_pred = F.softmax(y_pred, dim=1)
+
+    # Reshape predictions: (B, C, D) -> (B*D, C)
+    # This treats each of the 64 board positions as an independent sample
+    B, C, D = y_pred.shape
+    y_pred = y_pred.permute(0, 2, 1).reshape(-1, C)  # (B*D, C)
+
+    # Flatten targets: (B, D) -> (B*D,)
+    if y.dim() == 3 and y.shape[1] == 1:
+      y = y.squeeze(1)  # Handle (B, 1, D) -> (B, D)
+    y = y.flatten().long()  # (B*D,)
+
+    # Check if we have multiple classes present in this batch
+    # ROC-AUC requires at least 2 classes
+    unique_classes = torch.unique(y)
+    if len(unique_classes) < 2:
+      return None  # Cannot compute ROC-AUC with only one class
+
+    return (y_pred, y)
+
+
+class ChessAccuracyPreprocessor:
+  """
+  Preprocessor for Accuracy metric on chess dataset with multi-class classification.
+  Handles chess board positions with 13 classes (0-12 representing different pieces).
+  Computes position-wise accuracy by taking argmax over class dimension.
+  """
+
+  def __call__(self, output):
+    """
+    Preprocess the output before passing to Accuracy metric.
+
+    Args:
+        output: Tuple of (predictions, targets)
+                predictions are logits of shape (B, C, D) where:
+                  B = batch size
+                  C = 13 classes (piece types)
+                  D = 64 positions (chess board squares)
+                targets are class indices of shape (B, D) with values 0-12
+
+    Returns:
+        Preprocessed (predictions, targets) tuple with flattened tensors:
+          - predictions: (B*D,) predicted class indices
+          - targets: (B*D,) ground truth class indices
+    """
+    y_pred, y = output
+
+    # Take argmax over class dimension to get predicted classes
+    # Shape: (B, C, D) -> (B, D)
+    y_pred = torch.argmax(y_pred, dim=1)
+
+    # Flatten predictions: (B, D) -> (B*D,)
+    y_pred = y_pred.flatten().int()
+
+    # Flatten targets: (B, D) -> (B*D,)
+    if y.dim() == 3 and y.shape[1] == 1:
+      y = y.squeeze(1)  # Handle (B, 1, D) -> (B, D)
+    y = y.flatten().int()
+
+    return (y_pred, y)
+
+
 class MetricWithPreprocessor:
   """
   Wrapper that combines a metric with a preprocessor.
@@ -134,10 +233,27 @@ def build_metrics(args):
 
     # Metrics are only needed for autoencoder training
     if args.model in ['autoencoder']:
-      # Check if we're working with thresholded (binary) data
-      is_thresholded = is_thresholded_dataset(args.dataset_name, args.dataset_path)
+      # Check if this is the chess dataset (multi-class classification)
+      if args.dataset_name == 'chess':
+        # Chess dataset: multi-class classification with 13 classes
+        # Create base metrics
+        roc_auc_metric = ROC_AUC(device=args.device)
+        accuracy_metric = Accuracy(device=args.device)
 
-      if is_thresholded:
+        # Create chess-specific preprocessors for multi-class classification
+        roc_auc_preprocessor = ChessROCAUCPreprocessor(num_classes=13)
+        accuracy_preprocessor = ChessAccuracyPreprocessor()
+
+        # Combine metrics with preprocessors
+        metrics = {
+          'roc_auc': MetricWithPreprocessor(roc_auc_metric, roc_auc_preprocessor),
+          'acc': MetricWithPreprocessor(accuracy_metric, accuracy_preprocessor)
+        }
+        print(f'Using metrics for {args.model} with chess dataset (13 classes): {list(metrics.keys())}')
+        print('Position-wise ROC-AUC and Accuracy metrics will assess chess piece classification performance')
+
+      # Check if we're working with thresholded (binary) data
+      elif is_thresholded_dataset(args.dataset_name, args.dataset_path):
         # For thresholded/binary datasets, use pixel-wise ROC-AUC and Accuracy
         # Create base metrics
         roc_auc_metric = ROC_AUC(device=args.device)

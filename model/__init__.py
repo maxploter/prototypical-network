@@ -35,16 +35,19 @@ def build_model(args):
     # Determine whether to return logits or sigmoid output
     return_logits = False  # Default for backward compatibility (sigmoid + MSE)
     num_classes = None  # Default for single value per position
+    input_dim = 784  # Default for MNIST (28*28)
 
     if args.dataset_name == 'tmnist':
       # For thresholded datasets, return logits for BCEWithLogitsLoss
       return_logits = is_thresholded_dataset(args.dataset_name, args.dataset_path)
     elif args.dataset_name == 'chess':
       # Chess uses multi-class classification (13 classes: 0-12)
-      return_logits = True  # Return logits for CrossEntropyLoss
+      return_logits = True
       num_classes = 13
+      input_dim = 64  # Chess has 64 squares
 
-    model = Autoencoder(encoding_dim=args.embedding_dim, return_logits=return_logits, num_classes=num_classes)
+    model = Autoencoder(encoding_dim=args.embedding_dim, return_logits=return_logits, num_classes=num_classes,
+                        input_dim=input_dim)
   else:
     raise ValueError(f"Unknown model type: {args.model}.")
 
