@@ -5,26 +5,7 @@ import chess  # pip install chess
 import chess.pgn
 import numpy as np
 import pandas as pd
-
-
-def extract_moves_from_pgn(path, max_games=None):
-  """
-  Return list of games, each game is a list of UCI strings.
-  Only the mainline is read; comments/variations are ignored.
-  """
-  games = []
-  with open(path, "r", encoding="utf-8", errors="ignore") as f:
-    n = 0
-    while True:
-      game = chess.pgn.read_game(f)
-      if game is None:
-        break
-      uci = [m.uci() for m in game.mainline_moves()]
-      games.append(uci)
-      n += 1
-      if max_games is not None and n >= max_games:
-        break
-  return games
+from tqdm import tqdm
 
 
 def board_to_vec(board):
@@ -52,61 +33,80 @@ def move_to_index(move):
   return move.from_square * 64 + move.to_square
 
 
-def uci_games_to_arrays(uci_games):
-  """
-  For each game:
-    - positions: list shape (T, 64), board after each ply
-    - move_ids:  list shape (T,), values in [0, 4095]
-  Returns two parallel lists of arrays: positions_list, move_ids_list.
-  """
-  positions_list, move_ids_list = [], []
-  for game in uci_games:
-    b = chess.Board()
-    pos_rows, ids = [], []
-    pos_rows.append(board_to_vec(b.copy()))
-    for u in game:
-      mv = chess.Move.from_uci(u)
-      b.push(mv)
-      pos_rows.append(board_to_vec(b))  # board AFTER this move
-      ids.append(move_to_index(mv))
-    if pos_rows:
-      positions_list.append(pos_rows)
-      move_ids_list.append(ids)
-    else:
-      positions_list.append([0] * 64)
-      move_ids_list.append([0])
-  return positions_list, move_ids_list
 
 
-def save_positions_to_csv(positions_list, move_ids_list, output_path):
+def process_pgn_to_csv_streaming(pgn_path, output_path, max_games=None, chunk_size=10000):
   """
-  Save all board positions and moves to a CSV file.
-  Each row is one board position (64 values) plus the move_id.
+  Process PGN file and write positions to CSV in a streaming fashion.
+  This avoids loading all games into memory at once.
 
   Args:
-      positions_list: List of games, each game is a list of 64-element board vectors
-      move_ids_list: List of games, each game is a list of move indices
-      output_path: Path to save the CSV file
+      pgn_path: Path to PGN file
+      output_path: Path to save CSV file
+      max_games: Maximum number of games to process (None for all)
+      chunk_size: Number of positions to accumulate before writing to disk
+
+  Returns:
+      Tuple of (total_games, total_positions)
   """
-  all_positions = []
-  all_move_ids = []
+  column_names = [f'sq{i}' for i in range(64)] + ['move_id']
+  total_positions = 0
+  total_games = 0
+  buffer = []
 
-  for game_positions, game_moves in zip(positions_list, move_ids_list):
-    # First position has no move (it's the starting position)
-    # Subsequent positions have corresponding moves
-    all_positions.append(game_positions[0])
-    all_move_ids.append(-1)  # -1 indicates no move (starting position)
+  # Write CSV header
+  with open(output_path, 'w') as f:
+    f.write(','.join(column_names) + '\n')
 
-    for pos, move_id in zip(game_positions[1:], game_moves):
-      all_positions.append(pos)
-      all_move_ids.append(move_id)
+  print(f"Processing PGN file: {pgn_path}")
+  with open(pgn_path, "r", encoding="utf-8", errors="ignore") as f:
+    pbar = tqdm(desc="Processing games", unit="game")
 
-  # Create DataFrame with columns sq0, sq1, ..., sq63, move_id
-  df = pd.DataFrame(all_positions, columns=[f'sq{i}' for i in range(64)])
-  df['move_id'] = all_move_ids
-  df.to_csv(output_path, index=False)
-  print(f"Saved {len(all_positions)} positions to {output_path}")
-  return len(all_positions)
+    while True:
+      # Read one game at a time
+      game = chess.pgn.read_game(f)
+      if game is None:
+        break
+
+      # Convert game to positions
+      b = chess.Board()
+
+      # Add starting position
+      row = board_to_vec(b.copy()) + [-1]
+      buffer.append(row)
+      total_positions += 1
+
+      # Process each move
+      for move in game.mainline_moves():
+        b.push(move)
+        move_id = move_to_index(move)
+        row = board_to_vec(b) + [move_id]
+        buffer.append(row)
+        total_positions += 1
+
+      total_games += 1
+      pbar.update(1)
+
+      # Write chunk if buffer is full
+      if len(buffer) >= chunk_size:
+        df_chunk = pd.DataFrame(buffer, columns=column_names)
+        df_chunk.to_csv(output_path, mode='a', header=False, index=False)
+        buffer = []
+
+      # Check max_games limit
+      if max_games is not None and total_games >= max_games:
+        break
+
+    pbar.close()
+
+  # Write remaining buffer
+  if buffer:
+    df_chunk = pd.DataFrame(buffer, columns=column_names)
+    df_chunk.to_csv(output_path, mode='a', header=False, index=False)
+
+  print(f"Processed {total_games} games")
+  print(f"Saved {total_positions} positions to {output_path}")
+  return total_games, total_positions
 
 
 def split_dataset(num_positions, output_dir, train_ratio=0.64, val_ratio=0.16, test_ratio=0.20):
@@ -186,16 +186,9 @@ def process(pgn_path, output_dir, max_games=None, train_ratio=0.64, val_ratio=0.
   output_dir = Path(output_dir)
   output_dir.mkdir(parents=True, exist_ok=True)
 
-  print(f"Extracting moves from {pgn_path}...")
-  uci_games = extract_moves_from_pgn(pgn_path, max_games=max_games)
-  print(f"Extracted {len(uci_games)} games")
-
-  print("Converting games to board positions...")
-  positions_list, move_ids_list = uci_games_to_arrays(uci_games)
-
-  # Save positions to CSV
+  # Process PGN file directly to CSV using streaming approach
   csv_path = output_dir / 'chess_positions.csv'
-  num_positions = save_positions_to_csv(positions_list, move_ids_list, csv_path)
+  num_games, num_positions = process_pgn_to_csv_streaming(pgn_path, csv_path, max_games=max_games)
 
   # Create train/val/test splits
   print("Creating train/val/test splits...")
@@ -213,7 +206,7 @@ def process(pgn_path, output_dir, max_games=None, train_ratio=0.64, val_ratio=0.
     'train_indices_path': output_dir / 'train_indices.txt',
     'val_indices_path': output_dir / 'val_indices.txt',
     'test_indices_path': output_dir / 'test_indices.txt',
-    'num_games': len(uci_games),
+    'num_games': num_games,
     'num_positions': num_positions,
   }
 

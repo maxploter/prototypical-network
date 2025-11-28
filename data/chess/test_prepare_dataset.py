@@ -7,10 +7,8 @@ import numpy as np
 import pandas as pd
 
 from data.chess.prepare_dataset import (
-  extract_moves_from_pgn,
   board_to_vec,
   move_to_index,
-  uci_games_to_arrays,
   process,
 )
 
@@ -50,23 +48,6 @@ class TestPrepareDataset(unittest.TestCase):
     import shutil
     shutil.rmtree(self.temp_dir)
 
-  def test_extract_moves_from_pgn(self):
-    """Test extracting moves from PGN file."""
-    games = extract_moves_from_pgn(self.pgn_path, max_games=2)
-
-    # Verify games were extracted correctly
-    self.assertEqual(len(games), 2)
-    self.assertEqual(len(games[0]), 6)  # 3 full moves = 6 half-moves
-    self.assertEqual(len(games[1]), 6)
-
-    # Verify first moves are correct
-    self.assertEqual(games[0][0], 'e2e4')  # 1. e4
-    self.assertEqual(games[0][1], 'e7e5')  # 1... e5
-    self.assertEqual(games[0][2], 'g1f3')  # 2. Nf3
-
-    # Verify second game first moves
-    self.assertEqual(games[1][0], 'd2d4')  # 1. d4
-    self.assertEqual(games[1][1], 'd7d5')  # 1... d5
 
   def test_board_to_vec(self):
     """Test board encoding to vector."""
@@ -119,40 +100,6 @@ class TestPrepareDataset(unittest.TestCase):
     expected3 = 6 * 64 + 21
     self.assertEqual(idx3, expected3)
 
-  def test_uci_games_to_arrays(self):
-    """Test converting UCI games to position and move arrays."""
-    games = extract_moves_from_pgn(self.pgn_path, max_games=2)
-    positions_list, move_ids_list = uci_games_to_arrays(games)
-
-    # Should have 2 games
-    self.assertEqual(len(positions_list), 2)
-    self.assertEqual(len(move_ids_list), 2)
-
-    # First game: 6 moves -> 7 positions (initial + 6 after each move)
-    self.assertEqual(len(positions_list[0]), 7)
-    self.assertEqual(len(move_ids_list[0]), 6)
-
-    # Second game: 6 moves -> 7 positions
-    self.assertEqual(len(positions_list[1]), 7)
-    self.assertEqual(len(move_ids_list[1]), 6)
-
-    # Each position should have 64 elements
-    for pos in positions_list[0]:
-      self.assertEqual(len(pos), 64)
-
-    # Move IDs should be in valid range [0, 4095]
-    for move_id in move_ids_list[0]:
-      self.assertGreaterEqual(move_id, 0)
-      self.assertLess(move_id, 4096)
-
-    # First position should be the starting position
-    board = chess.Board()
-    expected_start = board_to_vec(board)
-    self.assertEqual(positions_list[0][0], expected_start)
-
-    # First move should be e2e4 (12*64 + 28 = 796)
-    expected_first_move = move_to_index('e2e4')
-    self.assertEqual(move_ids_list[0][0], expected_first_move)
 
   def test_process(self):
     """Test the complete processing pipeline."""
